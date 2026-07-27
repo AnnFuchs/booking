@@ -1,0 +1,46 @@
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.auth.jwt import create_access_token
+from src.auth.router_responses import AUTH_LOGIN_RESPONSES
+from src.auth.schemas import AuthData, AuthToken
+from src.auth.service import auth_service
+from src.core.constants import TOKEN_TYPE
+from src.core.logger import get_logger
+from src.db.session import get_async_session
+
+logger = get_logger(__name__)
+
+router = APIRouter(prefix='/auth', tags=['Аутентификация'])
+
+SessionDep = Annotated[AsyncSession, Depends(get_async_session)]
+
+
+@router.post(
+    '/login',
+    summary='Получение токена авторизации',
+    response_model=AuthToken,
+    responses=AUTH_LOGIN_RESPONSES,
+)
+async def auth_user(user_data: AuthData, session: SessionDep) -> AuthToken:
+    """Возвращает токен для последующей авторизации пользователя."""
+    user = await auth_service.auth_by_login(
+        login=user_data.login,
+        password=user_data.password,
+        session=session,
+    )
+    if user is None:
+        logger.warning(
+            'Неудачная попытка входа для логина: %s',
+            user_data.login,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail='Неверный логин или пароль',
+        )
+
+    access_token = create_access_token({'sub': str(user.id)})
+    logger.info('Пользователь успешно вошёл в систему: %s', user.username)
+    return AuthToken(access_token=access_token, token_type=TOKEN_TYPE)

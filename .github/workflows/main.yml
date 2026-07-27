@@ -1,0 +1,81 @@
+
+name: Cafe Booking Workflow
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+
+    - name: Create .env file for Docker
+      run: |
+        echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}" >> .env
+        echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
+        echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}" >> .env
+        echo "POSTGRES_SERVER=db"  >> .env
+        echo "POSTGRES_PORT=5432" >> .env
+        echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
+        echo "ALGORITHM=${{ secrets.ALGORITHM }}" >> .env
+        echo "FIRST_SUPERUSER_LOGIN=${{ secrets.FIRST_SUPERUSER_LOGIN }}" >> .env
+        echo "FIRST_SUPERUSER_PASSWORD=${{ secrets.FIRST_SUPERUSER_PASSWORD }}" >> .env
+
+        echo "MAIL_USERNAME=${{ secrets.MAIL_USERNAME }}" >> .env
+        echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
+        echo "MAIL_FROM=${{ secrets.MAIL_FROM }}" >> .env
+        echo "MAIL_SERVER=${{ secrets.MAIL_SERVER }}" >> .env
+        echo "MAIL_PORT=2525" >> .env
+        echo "MAIL_STARTTLS=False" >> .env
+        echo "MAIL_SSL_TLS=False" >> .env
+        echo "MAIL_FROM_NAME=${{ secrets.MAIL_FROM_NAME }}" >> .env
+
+
+    - name: Build and Run Tests in Docker
+      run: |
+        # 1. Сносим всё
+        docker compose -f infra/docker-compose.production.yml down -v
+
+        # 2. Пересобираем образ
+        docker compose -f infra/docker-compose.production.yml build api
+
+        # 3. Поднимаем базу и приложение
+        docker compose -f infra/docker-compose.production.yml up -d db api
+        sleep 20
+
+        # 4. Применяем миграции
+        docker compose -f infra/docker-compose.production.yml exec -T api alembic -c src/alembic.ini upgrade head
+
+        # 5. Запускаем тесты
+        docker compose -f infra/docker-compose.production.yml exec -T \
+          -e POSTGRES_SERVER=db \
+          -e REDIS_HOST=redis \
+          -e REDIS_PORT=6379 \
+          -e POSTGRES_SERVER=db \
+          -e DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }} \
+          -e SYNC_DATABASE_URL=postgresql+psycopg2://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }} \
+          api pytest -s
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: tests
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    steps:
+    - name: Executing remote ssh commands to deploy
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USER }}
+        key: ${{ secrets.SSH_KEY }}
+        passphrase: ${{ secrets.PASSPHRASE }}
+        script: |
+          cd 64_65_booking_seats_team_3
+          git pull origin ${GITHUB_REF_NAME}
+          docker compose -f infra/docker-compose.production.yml up -d --build
+          docker compose -f infra/docker-compose.production.yml exec -T api alembic -c src/alembic.ini upgrade head
+          docker compose -f infra/docker-compose.production.yml restart nginx
