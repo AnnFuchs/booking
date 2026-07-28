@@ -1,3 +1,5 @@
+from functools import cached_property
+
 from pydantic import EmailStr, Field, SecretStr, field_validator
 from pydantic_extra_types.phone_numbers import PhoneNumber
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,33 +21,39 @@ class Settings(BaseSettings):
             'description': 'Локальный сервер',
         },
     ]
-    cors_origin: str = 'http://localhost:8000'
+    cors_origin: str = Field(
+        default='http://localhost:8000',
+        min_length=MIN_LENGTH,
+    )
 
     postgres_user: str = Field(min_length=MIN_LENGTH)
-    postgres_password: SecretStr
+    postgres_password: SecretStr = Field(min_length=MIN_LENGTH)
     postgres_db: str = Field(min_length=MIN_LENGTH)
     postgres_server: str = Field(min_length=MIN_LENGTH)
     postgres_port: int
-    redis_host: str = 'redis'
+    redis_host: str = Field(default='redis', min_length=MIN_LENGTH)
     redis_port: int = 6379
     redis_db: int = 0
     celery_broker_url: str | None = None
     celery_result_backend: str | None = None
 
-    secret_key: SecretStr
+    secret_key: SecretStr = Field(min_length=MIN_LENGTH)
     algorithm: str = Field(min_length=MIN_LENGTH)
 
-    first_superuser_login: EmailStr | PhoneNumber
-    first_superuser_password: SecretStr
+    first_superuser_login: EmailStr | PhoneNumber = Field(
+        min_length=MIN_LENGTH,
+        description='Email или номер телефона суперпользователя',
+    )
+    first_superuser_password: SecretStr = Field(min_length=MIN_LENGTH)
 
-    mail_username: str
-    mail_password: SecretStr
-    mail_from: str
-    mail_server: str
+    mail_username: str = Field(min_length=MIN_LENGTH)
+    mail_password: SecretStr = Field(min_length=MIN_LENGTH)
+    mail_from: str = Field(min_length=MIN_LENGTH)
+    mail_server: str = Field(min_length=MIN_LENGTH)
     mail_port: int = 2525
     mail_starttls: bool = False
     mail_ssl_tls: bool = False
-    mail_from_name: str = 'cafe booking'
+    mail_from_name: str = Field(default='cafe booking', min_length=MIN_LENGTH)
 
     _env_file = BASE_DIR / 'infra' / '.env'
 
@@ -68,7 +76,7 @@ class Settings(BaseSettings):
         """Создание списка разрешенных источников для CORS."""
         return [origin.strip() for origin in self.cors_origin.split(',')]
 
-    @property
+    @cached_property
     def database_url(self) -> str:
         """Создание URL базы данных."""
         return (
@@ -78,7 +86,7 @@ class Settings(BaseSettings):
             f'{self.postgres_port}/{self.postgres_db}'
         )
 
-    @property
+    @cached_property
     def sync_database_url(self) -> str:
         """Создание синхронного URL базы данных для Celery."""
         return (
@@ -88,7 +96,7 @@ class Settings(BaseSettings):
             f'{self.postgres_port}/{self.postgres_db}'
         )
 
-    @property
+    @cached_property
     def redis_url(self) -> str:
         """Создание URL Redis."""
         return f'redis://{self.redis_host}:{self.redis_port}/{self.redis_db}'
