@@ -14,9 +14,15 @@ from src.core.constants import (
 _user_info_ctx: ContextVar[str] = ContextVar('user_info', default=LOG_SYS_NAME)
 
 
-def set_user_context(username: str | None, user_id: str | None) -> None:
+def set_user_context(
+    username: str | None = None,
+    user_id: str | None = None,
+) -> None:
     """Установка контекста пользователя для текущего запроса."""
-    user_info = f'{username}({user_id})' if username else LOG_SYS_NAME
+    if username and user_id:
+        user_info = f'{username}({user_id})'
+    else:
+        user_info = LOG_SYS_NAME
     _user_info_ctx.set(user_info)
 
 
