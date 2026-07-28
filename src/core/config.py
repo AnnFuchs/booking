@@ -19,7 +19,6 @@ class Settings(BaseSettings):
             'description': 'Локальный сервер',
         },
     ]
-    cors_origin: str = 'http://localhost:8000'
 
     postgres_user: str = Field(min_length=MIN_LENGTH)
     postgres_password: SecretStr
@@ -52,7 +51,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=_env_file if _env_file.exists() else None,
         env_file_encoding='utf-8',
-        case_sensitive=False,
     )
 
     @field_validator('postgres_port')
@@ -62,11 +60,6 @@ class Settings(BaseSettings):
         if not 1 <= value <= 65535:
             raise ValueError('Номер порта должен быть в диапазоне 1-65535')
         return value
-
-    @property
-    def cors_origin_list(self) -> list[str]:
-        """Создание списка разрешенных источников для CORS."""
-        return [origin.strip() for origin in self.cors_origin.split(',')]
 
     @property
     def database_url(self) -> str:

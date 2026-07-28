@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,14 +17,11 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Создание админа на старте приложения."""
     logger.info('Запуск приложения...')
-    try:
-        async with AsyncSessionLocal() as session:
-            await create_first_admin(session=session)
-    except Exception as e:
-        logger.error('Ошибка при создании первого администратора: %s', e)
+    async with AsyncSessionLocal() as session:
+        await create_first_admin(session=session)
     logger.info('Приложение запущено.')
     yield
     logger.info('Приложение завершает работу.')
@@ -41,10 +38,10 @@ app = FastAPI(
 app.add_middleware(ResetUserContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origin_list,
+    allow_origins=['*'],
     allow_credentials=True,
-    allow_methods=['GET', 'POST', 'PATCH'],
-    allow_headers=['Authorization', 'Content-Type'],
+    allow_methods=['*'],
+    allow_headers=['*'],
 )
 
 app.include_router(main_router)
