@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.interfaces import ExecutableOption
 
 from src.core.logger import get_logger
-from src.crud.utils import build_filter_conditions, validate_fields_exist
+from src.crud.utils import (
+    build_filter_conditions,
+    check_all_fields_valid,
+    check_options_valid,
+    validate_and_get_column,
+)
 from src.db.base import Base
 
 ModelType = TypeVar('ModelType', bound=Base)
@@ -58,7 +63,8 @@ class CRUDBase(Generic[ModelType]):
         """
         query = select(self.model).where(self.model.id == obj_id)
         if options:
-            query = query.options(*options)
+            options = check_options_valid(options)
+            query = query.options(*options) if options is not None else query
         if filters:
             conditions = build_filter_conditions(self.model, filters)
             if conditions:
@@ -87,8 +93,6 @@ class CRUDBase(Generic[ModelType]):
             AttributeError: Если указано несуществующее поле в фильтрах
             TypeError: Если поле не является колонкой БД
             ValueError: Если оператор не поддерживается
-
-        Закоментирован код пагинации.
 
         """
         query = select(self.model)
@@ -124,25 +128,14 @@ class CRUDBase(Generic[ModelType]):
             ValueError: Если переданы невалидные поля
 
         """
-        obj_in_data = obj_in.model_dump(by_alias=True, exclude=exclude_fields)
-        if extra_data:
-            _, invalid_fields = validate_fields_exist(self.model, extra_data)
-
-            if invalid_fields:
-                logger.error(
-                    'Несуществующие поля %s в модели %s.',
-                    invalid_fields,
-                    self.model.__name__,
-                )
-                raise ValueError(
-                    f'Несуществующие поля в модели {self.model.__name__}: '
-                    f'{", ".join(invalid_fields)}. '
-                    f'Доступные поля: {
-                        ", ".join(sorted(self.available_columns))
-                    }',
-                )
-
-        obj_in_data.update(extra_data)
+        _, obj_in_data = check_all_fields_valid(
+            self.model,
+            obj_in,
+            exclude_fields,
+            extra_data,
+            by_alias=True,
+            exclude_unset=None,
+        )
         db_obj = self.model(**obj_in_data)
         session.add(db_obj)
         if commit:
@@ -177,25 +170,14 @@ class CRUDBase(Generic[ModelType]):
             ValueError: Если переданы невалидные поля
 
         """
-        update_data = obj_in.model_dump(
-            exclude_unset=True,
-            exclude=exclude_fields,
-        )
-        valid_fields, invalid_fields = validate_fields_exist(
+        valid_fields, update_data = check_all_fields_valid(
             self.model,
-            update_data,
+            obj_in,
+            exclude_fields,
+            extra_data=None,
+            by_alias=None,
+            exclude_unset=True,
         )
-        if invalid_fields:
-            logger.error(
-                'Попытка обновить несуществующие поля %s в модели %s.',
-                invalid_fields,
-                self.model.__name__,
-            )
-            raise ValueError(
-                'Попытка обновить несуществующие или не-колонки: ',
-                f'{", ".join(invalid_fields)}. '
-                f'Доступные поля: {", ".join(sorted(self.available_columns))}',
-            )
         for field in valid_fields:
             setattr(db_obj, field, update_data[field])
         await session.commit()
@@ -257,13 +239,24 @@ class CRUDBase(Generic[ModelType]):
         Returns:
             Список активных объектов модели
 
+        Raises:
+        При проверке валидности переданного значения order_by:
+            AttributeError: Если поле не существует в модели
+            TypeError: Если поле существует, но не является колонкой БД
+                   (например, является relationship)
+
         """
+        validated_order_by_field = validate_and_get_column(
+            self.model,
+            order_by,
+        )
+
         query = (
             select(self.model)
             .where(
                 self.model.is_active.is_(True),
             )
-            .order_by(getattr(self.model, order_by))
+            .order_by(validated_order_by_field)
         )
 
         return (await session.execute(query)).scalars().all()
