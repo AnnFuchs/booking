@@ -1,7 +1,8 @@
-from typing import Any, Type, TypeVar
+from typing import Any, Iterable, Type, TypeVar
 
 from sqlalchemy import BinaryExpression
 from sqlalchemy.orm import InstrumentedAttribute, class_mapper
+from sqlalchemy.orm.interfaces import ExecutableOption
 from sqlalchemy.orm.properties import RelationshipProperty
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -75,7 +76,6 @@ def build_filter_conditions(
         filters = {
             'age__gt': 18,              # age > 18
             'status__in': [1, 2, 3],    # status IN (1, 2, 3)
-            'name__like': 'John%',      # name LIKE 'John%'
             'deleted_at__is_null': True # deleted_at IS NULL
         }
 
@@ -130,7 +130,7 @@ def build_filter_conditions(
 
 def validate_fields_exist(
     model: Type[ModelType],
-    fields: dict[str, Any],
+    fields: Iterable[str, Any],
 ) -> tuple[list[str], list[str]]:
     """Проверяет существование полей в модели.
 
@@ -153,3 +153,114 @@ def validate_fields_exist(
             invalid_fields.append(field_name)
 
     return valid_fields, invalid_fields
+
+
+def check_options_valid(
+    options: list[ExecutableOption],
+) -> list[ExecutableOption] | None:
+    """Проверяет, что переданные опции являются экземплярами ExecutableOption.
+
+    Отфильтровывает невалидные опции. Если после фильтрации список
+    оказывается пустым, логирует предупреждение и возвращает None.
+
+    Args:
+        options: Список опций загрузки SQLAlchemy.
+
+    Returns:
+        Список валидных опций или None, если все опции были отфильтрованы.
+
+    """
+    valid_options = [
+        opt for opt in options if isinstance(opt, ExecutableOption)
+    ]
+    if not valid_options:
+        logger.warning(
+            'Все переданные options были отфильтрованы как невалидные.',
+        )
+        return None
+    return valid_options
+
+
+def check_all_fields_valid(
+    model: Type[ModelType],
+    obj_in: Any,
+    exclude_fields: set[str] | None = None,
+    extra_data: Any = None,
+    by_alias: bool | None = None,
+    exclude_unset: bool | None = None,
+) -> tuple[list[str], Any]:
+    """Проверяет, что все переданные поля существуют в модели БД.
+
+    Извлекает данные из Pydantic-схемы с учётом параметров `by_alias`
+    и `exclude_unset`, исключает указанные поля, добавляет `extra_data`
+    и проверяет все итоговые ключи на принадлежность к колонкам модели.
+    Также валидирует сами `exclude_fields`, заменяя их на подмножество
+    реально существующих колонок.
+
+    Args:
+        model: Модель SQLAlchemy.
+        obj_in: Pydantic-схема с данными.
+        exclude_fields: Поля, которые нужно исключить из выгрузки.
+        extra_data: Дополнительные данные в формате ключ-значение.
+        by_alias: Если True, дамп выполняется с использованием алиасов полей.
+        exclude_unset: Если True, исключаются поля, не заданные явно.
+
+    Returns:
+        Кортеж (valid_fields, obj_in_data), где:
+            - valid_fields: список имён полей, прошедших проверку;
+            - obj_in_data: словарь данных, готовый для передачи в модель.
+
+    Raises:
+        ValueError: Если в итоговых данных обнаружены поля,
+            отсутствующие среди колонок модели.
+
+    """
+    if exclude_fields:
+        valid_exclude_fields, _ = validate_fields_exist(
+            model,
+            exclude_fields,
+        )
+        valid_exclude_fields = set(valid_exclude_fields)
+    else:
+        valid_exclude_fields = set()
+
+    if by_alias:
+        obj_in_data = obj_in.model_dump(
+            by_alias=by_alias,
+            exclude=valid_exclude_fields,
+        )
+    elif exclude_unset:
+        obj_in_data = obj_in.model_dump(
+            exclude_unset=exclude_unset,
+            exclude=valid_exclude_fields,
+        )
+    else:
+        obj_in_data = obj_in.model_dump(exclude=valid_exclude_fields)
+
+    if extra_data:
+        obj_in_data.update(extra_data)
+
+    valid_fields, invalid_fields = validate_fields_exist(
+            model,
+            obj_in_data,
+        )
+
+    if invalid_fields:
+        logger.error(
+            'Несуществующие поля %s в модели %s.',
+            invalid_fields,
+            model.__name__,
+        )
+        raise ValueError(
+            f'Несуществующие поля в модели {model.__name__}: '
+            f'{", ".join(invalid_fields)}. '
+            f'Доступные поля: {
+                ", ".join(
+                    sorted(
+                        [col.name for col in model.__table__.columns]
+                    ),
+                ),
+            }',
+        )
+
+    return valid_fields, obj_in_data
