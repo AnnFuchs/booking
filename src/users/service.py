@@ -123,7 +123,7 @@ class UserService:
                 secret.get_secret_value(),
             )
         if not request_author or request_author.role != Role.ADMIN:
-            forbidden = set(update_dict.keys()) & ADMIN_ONLY_UPDATE_FIELDS
+            forbidden = set(update_dict.keys()) & set(ADMIN_ONLY_UPDATE_FIELDS)
             if forbidden:
                 logger.warning(
                     'Попытка изменить поля %s, '

@@ -82,8 +82,6 @@ class CRUDBase(Generic[ModelType]):
 
         Args:
             session: Асинхронная сессия БД
-            skip: Количество пропускаемых записей
-            limit: Максимальное количество записей
             filters: Фильтры для выборки
 
         Returns:

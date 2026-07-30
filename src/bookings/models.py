@@ -13,6 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
+from src.bookings.utils import validate_date_not_in_past
 from src.core.constants import MAX_BOOKING_COMMENT, BookingStatus
 from src.db.base import Base
 
@@ -60,9 +61,7 @@ class Booking(Base):
     @validates('booking_date')
     def validate_booking_date(self, key: str, value: date) -> date:
         """Проверяет дату на валидность."""
-        if value < date.today():
-            raise ValueError('Дата бронирования не может быть в прошлом')
-        return value
+        return validate_date_not_in_past(value)
 
     cafe: Mapped['Cafe'] = relationship(
         'Cafe',

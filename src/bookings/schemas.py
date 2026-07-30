@@ -11,6 +11,7 @@ from pydantic import (
     field_validator,
 )
 
+from src.bookings.utils import validate_date_not_in_past
 from src.cafes.schemas import CafeShortInfo
 from src.core.constants import MAX_BOOKING_COMMENT
 from src.slots.schemas import TimeSlotShortInfo
@@ -36,18 +37,20 @@ class BookingCreate(BaseModel):
     """Схема для создания бронирования."""
 
     cafe_id: UUID
-    tables_slots: list[BookingTableSlot] = Field(..., min_length=1)
+    tables_slots: list[BookingTableSlot] = Field(
+        ...,
+        min_length=1,
+        max_length=5,
+    )
     guest_number: int = Field(..., gt=0)
     note: str | None = Field(None, max_length=MAX_BOOKING_COMMENT)
     booking_date: date
 
     @field_validator('booking_date')
     @classmethod
-    def validate_booking_date(cls, v: date) -> date:
+    def validate_booking_date(cls, value: date) -> date:
         """Проверяет дату на валидность."""
-        if v < date.today():
-            raise ValueError('Дата бронирования не может быть в прошлом')
-        return v
+        return validate_date_not_in_past(value)
 
 
 class BookingInfo(BaseModel):
@@ -107,7 +110,11 @@ class BookingStatus(RootModel):
 class BookingUpdate(BaseModel):
     """Схема для обновления бронирования."""
 
-    tables_slots: list[BookingTableSlot] | None = Field(None, min_length=1)
+    tables_slots: list[BookingTableSlot] | None = Field(
+        None,
+        min_length=1,
+        max_length=5,
+    )
     guest_number: int | None = Field(None, gt=0)
     note: str | None = Field(None, max_length=MAX_BOOKING_COMMENT)
     status: BookingStatus | None = None
@@ -133,6 +140,6 @@ class BookingUpdate(BaseModel):
     @classmethod
     def validate_date(cls, value: date | None) -> date | None:
         """Проверяет, что дата бронирования не находится в прошлом."""
-        if value is not None and value < date.today():
-            raise ValueError('Дата бронирования не может быть в прошлом')
+        if value is not None:
+            return validate_date_not_in_past(value)
         return value
