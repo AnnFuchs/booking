@@ -107,7 +107,7 @@ class BookingCRUD(CRUDBase[Booking]):
                 Booking.user_id == user_id,
                 Booking.is_active,
                 Booking.status == BookingStatus.BOOKING,
-            ),
+            )
         )
         return (await db.execute(query)).scalar() or 0
 
