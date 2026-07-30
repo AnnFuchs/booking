@@ -36,7 +36,11 @@ class BookingCreate(BaseModel):
     """Схема для создания бронирования."""
 
     cafe_id: UUID
-    tables_slots: list[BookingTableSlot] = Field(..., min_length=1)
+    tables_slots: list[BookingTableSlot] = Field(
+        ...,
+        min_length=1,
+        max_length=5,
+    )
     guest_number: int = Field(..., gt=0)
     note: str | None = Field(None, max_length=MAX_BOOKING_COMMENT)
     booking_date: date
@@ -107,7 +111,11 @@ class BookingStatus(RootModel):
 class BookingUpdate(BaseModel):
     """Схема для обновления бронирования."""
 
-    tables_slots: list[BookingTableSlot] | None = Field(None, min_length=1)
+    tables_slots: list[BookingTableSlot] | None = Field(
+        None,
+        min_length=1,
+        max_length=5,
+    )
     guest_number: int | None = Field(None, gt=0)
     note: str | None = Field(None, max_length=MAX_BOOKING_COMMENT)
     status: BookingStatus | None = None
