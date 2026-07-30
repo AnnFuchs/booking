@@ -2,15 +2,14 @@ from datetime import date, datetime, time
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
+from src.bookings.crud import booking_crud
 from src.bookings.models import Booking, TableSlot
 from src.bookings.schemas import BookingTableSlot
-from src.core.constants import MAX_BOOKINGS_PER_USER, BookingStatus, Role
+from src.bookings.utils import validate_date_not_in_past
+from src.core.constants import MAX_BOOKINGS_PER_USER, Role
 from src.core.logger import get_logger
-from src.slots.models import Slot
 from src.users.models import User
 
 logger = get_logger(__name__)
@@ -68,6 +67,14 @@ async def validate_slot_not_in_past(
         HTTPException: Если время меньше текущего.
 
     """
+    try:
+        validate_date_not_in_past(booking_date)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
     booking_datetime = datetime.combine(booking_date, start_time)
     if booking_datetime < datetime.now():
         logger.warning(
@@ -97,16 +104,10 @@ async def check_user_booking_limit(
         HTTPException : 400 Если лимит бронирований исчерпан.
 
     """
-    query = (
-        select(func.count())
-        .select_from(Booking)
-        .where(
-            Booking.user_id == user_id,
-            Booking.is_active,
-            Booking.status == BookingStatus.BOOKING,
-        )
+    count = await booking_crud.get_and_count_bookings_for_user(
+        db,
+        user_id,
     )
-    count = (await db.execute(query)).scalar() or 0
     if count >= limit:
         logger.warning(
             'Превышен лимит активных бронирований (макс: %s)',
@@ -121,7 +122,7 @@ async def check_user_booking_limit(
 async def check_booking_collision(
     db: AsyncSession,
     user_id: UUID,
-    start_time: datetime,
+    start_time: time,
     booking_date: date,
 ) -> None:
     """Проверяет наличие у пользователя других броней на то же время.
@@ -136,18 +137,13 @@ async def check_booking_collision(
         HTTPException: Если найдено пересечение по времени.
 
     """
-    collision_query = await db.execute(
-        select(Booking)
-        .join(Booking.tables_slots)
-        .join(TableSlot.slot)
-        .where(
-            Booking.user_id == user_id,
-            Booking.is_active.is_(True),
-            Booking.booking_date == booking_date,
-            Slot.start_time == start_time,
-        ),
+    collision = await booking_crud.get_bookings(
+        db=db,
+        user_id=user_id,
+        booking_date=booking_date,
+        start_time=start_time,
     )
-    if collision_query.scalar_one_or_none():
+    if collision:
         logger.warning('Попытка брони на то же время в другом заведении.')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -249,49 +245,6 @@ async def validate_booking_for_cancellation(
         )
 
 
-async def validate_booking_availability(
-    db: AsyncSession,
-    booking_date: date,
-    items: list[BookingTableSlot],
-) -> list[UUID]:
-    """Проверяет доступность всех столов в списке и возвращает их id.
-
-    Args:
-        db (AsyncSession): Асинхронная сессия базы данных.
-        booking_date (date): Дата планируемого бронирования.
-        items (list[BookingTableSlot]): Список запрашиваемых пар стол-слот.
-
-    Returns:
-        list[UUID]: Список id найденных и свободных записей TableSlot.
-
-    Raises:
-        HTTPException: Если стол из списка уже занят или не существует.
-
-    """
-    table_slot_ids = []
-
-    for item in items:
-        query = select(TableSlot).where(
-            TableSlot.table_id == item.table_id,
-            TableSlot.slot_id == item.slot_id,
-            TableSlot.booking_date == booking_date,
-            TableSlot.booking_id.is_(None),
-        )
-        result = await db.execute(query)
-        ts = result.scalar_one_or_none()
-
-        if not ts:
-            logger.warning('Выбранный стол не доступен.')
-            raise HTTPException(
-                status_code=400,
-                detail='Один из столов недоступен',
-            )
-
-        table_slot_ids.append(ts.id)
-
-    return table_slot_ids
-
-
 async def validate_slots_availability(
     db: AsyncSession,
     booking_date: date,
@@ -313,69 +266,32 @@ async def validate_slots_availability(
         list[TableSlot]: Список найденных и проверенных объектов TableSlot.
 
     Raises:
-        HTTPException : 400 Если дата в прошлом или стол недоступен/занят.
+        HTTPException : 400 если стол недоступен/занят.
 
     """
-    # 1. Проверка даты (нельзя бронировать задним числом).
-    if booking_date < date.today():
-        logger.warning('Переданная дата бронирования уже прошла.')
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Нельзя забронировать столик на прошедшую дату.',
-        )
+    pairs = [(item.table_id, item.slot_id) for item in tables_slots]
 
-    found_table_slots = []
+    found_slots = await booking_crud.get_available_tableslots(
+        db,
+        pairs,
+        booking_date,
+    )
+
+    found_by_pair = {(ts.table_id, ts.slot_id): ts for ts in found_slots}
 
     for item in tables_slots:
-        # 2. Проверка существования каждой пары стол-слот.
-        query = (
-            select(TableSlot)
-            .options(
-                joinedload(TableSlot.slot),
-                joinedload(TableSlot.table),
-            )
-            .where(
-                TableSlot.table_id == item.table_id,
-                TableSlot.slot_id == item.slot_id,
-                TableSlot.booking_date == booking_date,
-                TableSlot.is_active,
-            )
-        )
-        result = await db.execute(query)
-        table_slot = result.scalar_one_or_none()
+        pair = (item.table_id, item.slot_id)
+        slot = found_by_pair.get(pair)
 
-        if not table_slot:
-            logger.warning(
-                'Слот %s для стола %s не найден',
-                item.slot_id,
-                item.table_id,
-            )
+        if slot is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail='Слот для стола не найден.',
             )
-
-        # 3. Проверка статуса активности и отсутствия существующих броней.
-        if table_slot.booking_id is not None:
-            logger.warning(
-                'Найдено бронирование %s для стола %s',
-                table_slot.booking_id,
-                item.table_id,
-            )
+        if slot.booking_id is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Стол на выбранное время уже забронирован.',
             )
 
-        if booking_date == date.today():
-            if table_slot.slot.start_time <= datetime.now().time():
-                logger.warning('Переданное время бронированния уже наступило.')
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Нельзя забронировать время, '
-                    'которое уже наступило.',
-                )
-
-        found_table_slots.append(table_slot)
-
-    return found_table_slots
+    return found_slots

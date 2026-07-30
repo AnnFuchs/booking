@@ -2,7 +2,6 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.bookings.crud import booking_crud
@@ -15,12 +14,11 @@ from src.bookings.schemas import BookingCreate, BookingUpdate
 from src.bookings.validators import (
     check_booking_collision,
     validate_booking_access,
-    validate_booking_availability,
     validate_manager_access,
     validate_slot_not_in_past,
     validate_slots_availability,
 )
-from src.core.constants import Role
+from src.core.constants import BookingStatus, Role
 from src.core.logger import get_logger
 from src.users.models import User
 
@@ -72,11 +70,6 @@ class BookingService:
             start_time=start_time,
             booking_date=booking_data.booking_date,
         )
-        await validate_booking_availability(
-            db=db,
-            booking_date=booking_data.booking_date,
-            items=booking_data.tables_slots,
-        )
 
         new_booking = await booking_crud.create_booking(
             db,
@@ -95,9 +88,9 @@ class BookingService:
         booking: Booking,
         user: User,
     ) -> Booking:
-        """Реализует логику мягкого удаления бронирования.
+        """Реализует логику отмены бронирования.
 
-        Меняет флаг is_active на False и освобождает связанный слот.
+        Меняет статус на CANELED и освобождает связанный слот.
 
         Args:
             db: Асинхронная сессия базы данных.
@@ -112,15 +105,15 @@ class BookingService:
 
         """
         await validate_manager_access(user=user, booking=booking)
-        if not booking.is_active:
+        if not booking.is_active or booking.status is BookingStatus.CANCELED:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Бронирование уже отменено или неактивно',
             )
-        deact_booking = await booking_crud.deactivate_booking(db, booking)
-        logger.debug('Деактивировано бронирование %s', deact_booking.id)
-        schedule_notifications_on_update(deact_booking)
-        return deact_booking
+        canceled_booking = await booking_crud.cancel_booking(db, booking)
+        logger.debug('Отменено бронирование %s', canceled_booking.id)
+        schedule_notifications_on_update(canceled_booking)
+        return canceled_booking
 
     async def get_booking_with_details(
         self,
@@ -205,23 +198,23 @@ class BookingService:
             HTTPException: Если менеджер не привязан к кафе и не админ.
 
         """
-        if not user.cafe_id and user.role != Role.ADMIN:
-            logger.warning('Пользователь %s не прикреплен к кафе', user.id)
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail='Вы не закреплены ни за одним кафе',
-            )
-
-        users_cafe_id = cafe_id if user.role == Role.ADMIN else user.cafe_id
+        if user.role != Role.ADMIN:
+            if not user.cafe_id:
+                logger.warning('Пользователь %s не прикреплен к кафе', user.id)
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail='Вы не закреплены ни за одним кафе',
+                )
+            cafe_id = user.cafe_id
 
         bookings = await booking_crud.get_bookings(
             db=db,
-            cafe_id=cafe_id or user.cafe_id,
+            cafe_id=cafe_id,
             user_id=user_id,
             booking_date=booking_date,
             is_active=is_active,
         )
-        logger.debug('Получены бронирования для кафе %s', users_cafe_id)
+        logger.debug('Получены бронирования для кафе %s', cafe_id)
         return bookings
 
     async def update_booking(
@@ -259,30 +252,24 @@ class BookingService:
             logger.debug('Запрошена деактивация бронирования %s', booking.id)
             return await booking_crud.deactivate_booking(db, booking)
 
+        if booking_data.status is BookingStatus.CANCELED:
+            logger.debug('Запрошена отмена бронирования %s', booking.id)
+            return await self.cancel_booking(db, booking, user)
+
         if booking_data.tables_slots is not None:
             logger.debug(
                 'Запрошено изменение столов для бронирования %s',
                 booking_id,
             )
-            await validate_slots_availability(
+            slots_objects = await validate_slots_availability(
                 db=db,
                 booking_date=booking_data.booking_date or booking.booking_date,
                 tables_slots=booking_data.tables_slots,
             )
 
-            stmt = select(TableSlot).where(
-                TableSlot.id.in_(booking_data.tables_slots),
-            )
-            result = await db.execute(stmt)
-            slots_objects = list(result.scalars().all())
-
-            if len(slots_objects) != len(booking_data.tables_slots):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail='Один или несколько столов не найдены',
-                )
-
-            booking_data.tables_slots = slots_objects
+            booking.tables_slots = slots_objects
+            # Так как slots_object это ORM-объекты, обновляем ORM-связь.
+            booking_data.tables_slots = None
 
         updated_booking = await booking_crud.update(
             session=db,
