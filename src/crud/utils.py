@@ -130,7 +130,7 @@ def build_filter_conditions(
 
 def validate_fields_exist(
     model: Type[ModelType],
-    fields: Iterable[str, Any],
+    fields: Iterable[str | Any],
 ) -> tuple[list[str], list[str]]:
     """Проверяет существование полей в модели.
 
