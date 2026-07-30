@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.sql.base import ExecutableOption
 
 from src.bookings.models import Booking, TableSlot
-from src.bookings.schemas import BookingCreate, BookingUpdate
+from src.bookings.schemas import BookingCreate
 from src.core.constants import BookingStatus as BStatus
 from src.crud.crud import CRUDBase
 from src.db.models_for_alembic import Cafe, Table
@@ -124,35 +124,6 @@ class BookingCRUD(CRUDBase[Booking]):
         result = await db.execute(query)
         return list(result.unique().scalars().all())
 
-    async def update_booking_object(
-        self,
-        db: AsyncSession,
-        booking: Booking,
-        update_data: BookingUpdate,
-    ) -> Booking:
-        """Обновляет поля бронирования из пришедшей схемы.
-
-        Args:
-            db (AsyncSession): Асинхронная сессия базы данных.
-            booking (Booking): Существующий объект бронирования.
-            update_data (BookingUpdate): Схема с данными для обновления.
-
-        Returns:
-            Booking: Обновленный объект бронирования.
-
-        """
-        obj_data = update_data.model_dump(exclude_unset=True)
-
-        for key, value in obj_data.items():
-            setattr(booking, key, value)
-
-            if key == 'status' and value == BStatus.CANCELED:
-                booking.is_active = False
-
-        await db.commit()
-        await db.refresh(booking)
-        return booking
-
     async def create_booking(
         self,
         db: AsyncSession,
@@ -198,18 +169,18 @@ class BookingCRUD(CRUDBase[Booking]):
     ) -> Booking:
         """Мягко удаляет бронирование.
 
-        Переводит бронь в статус CANCELED, деактивирует её и
-        автоматически освобождает все связанные слоты столов.
+        Деактивирует бронь и автоматически освобождает
+        все связанные слоты столов.
 
         Args:
             db (AsyncSession): Асинхронная сессия базы данных.
             booking (Booking): Объект бронирования для отмены.
 
         Returns:
-            Booking: Деактивированный объект бронирования.
+            booking (Booking): Деактивированный объект бронирования.
 
         """
-        booking.is_active, booking.status = False, BStatus.CANCELED
+        booking.is_active = False
         await db.execute(
             update(TableSlot)
             .where(TableSlot.booking_id == booking.id)

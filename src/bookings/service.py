@@ -20,7 +20,7 @@ from src.bookings.validators import (
     validate_slot_not_in_past,
     validate_slots_availability,
 )
-from src.core.constants import BookingStatus, Role
+from src.core.constants import Role
 from src.core.logger import get_logger
 from src.users.models import User
 
@@ -214,8 +214,6 @@ class BookingService:
 
         users_cafe_id = cafe_id if user.role == Role.ADMIN else user.cafe_id
 
-        users_cafe_id = cafe_id if user.role == Role.ADMIN else user.cafe_id
-
         bookings = await booking_crud.get_bookings(
             db=db,
             cafe_id=cafe_id or user.cafe_id,
@@ -257,10 +255,7 @@ class BookingService:
         booking = await self.get_booking_with_details(db, booking_id, user)
         await validate_manager_access(user=user, booking=booking)
 
-        if (
-            booking_data.is_active is False
-            or booking_data.status == BookingStatus.CANCELED
-        ):
+        if booking_data.is_active is False:
             logger.debug('Запрошена деактивация бронирования %s', booking.id)
             return await booking_crud.deactivate_booking(db, booking)
 
@@ -289,10 +284,10 @@ class BookingService:
 
             booking_data.tables_slots = slots_objects
 
-        updated_booking = await booking_crud.update_booking_object(
-            db=db,
-            booking=booking,
-            update_data=booking_data,
+        updated_booking = await booking_crud.update(
+            session=db,
+            db_obj=booking,
+            obj_in=booking_data,
         )
         logger.debug('Обновлено бронирование %s', updated_booking.id)
         schedule_notifications_on_update(updated_booking)
