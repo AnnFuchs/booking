@@ -1,81 +1,34 @@
-from src.core.constants import (
-    MESSAGE_DUPLICATE_NAME_AND_ADDRESS,
-    MESSAGE_MANAGERS_ID_DUPLICATE,
-    MESSAGE_MANAGERS_ID_IS_NULL,
-)
+class CafeDuplicateError(Exception):
+    """Ошибка при дублировании названия или адреса кафе с имеющимся базе."""
+
+    pass
 
 
-class CafeError(ValueError):
-    """Базовое исключение для всех ошибок кафе.
+class CafeNotFoundError(Exception):
+    """Ошибка при отсутствии кафе в базе."""
 
-    Позволяет ловить ВСЕ ошибки слотов одной строкой:
-        try:
-            # какой-то код с кафе
-            await cafe_service.create_cafe(...)
-        except CafeError as error:  # Ловит ЛЮБУЮ ошибку из модуля cafe
-            # Обработка любой ошибки кафе
-            print(f"Ошибка в модуле кафе: {error}")
-
-    вместо:
-        try:
-        ...
-        except (CafeOverlapError, CafeNotFoundError, ...) as error:
-        # нужно перечислять все
-    """
+    pass
 
 
-class CafeDuplicateError(CafeError):
-    """Кафе с таким названием и адресом уже существует."""
+class EmptyManagersListError(Exception):
+    """Ошибка при передаче пустого списка менеджеров."""
 
-    def __init__(
-        self,
-        detail: str = MESSAGE_DUPLICATE_NAME_AND_ADDRESS,
-    ) -> None:
-        """Инициализация ошибки дублирования кафе."""
-        self.detail = detail
-        super().__init__(detail)
+    pass
 
 
-class CafeNotFoundError(CafeError):
-    """Кафе не найдено."""
+class DuplicateManagersError(Exception):
+    """Ошибка при передаче дубликатов в списке менеджеров."""
 
-    def __init__(self, cafe_id: str) -> None:
-        """Инициализация ошибки отсутствия кафе."""
-        self.cafe_id = cafe_id
-        super().__init__(f'Кафе с id {cafe_id} не найдено')
+    pass
 
 
-class EmptyManagersListError(CafeError):
-    """Список менеджеров пуст."""
+class ManagerNotFoundError(Exception):
+    """Ошибка при отсутствии менеджера с переданным ID в базе."""
 
-    def __init__(self, detail: str = MESSAGE_MANAGERS_ID_IS_NULL) -> None:
-        """Инициализация ошибки пустого списка менеджеров."""
-        self.detail = detail
-        super().__init__(detail)
+    pass
 
 
-class DuplicateManagersError(CafeError):
-    """В списке менеджеров есть дубликаты."""
+class ManagerRoleError(Exception):
+    """Ошибка при несоотстветствии роли пользователя менеджерской."""
 
-    def __init__(self, detail: str = MESSAGE_MANAGERS_ID_DUPLICATE) -> None:
-        """Инициализация ошибки дублирования менеджеров."""
-        self.detail = detail
-        super().__init__(detail)
-
-
-class ManagerNotFoundError(CafeError):
-    """Менеджер с таким ID не найден."""
-
-    def __init__(self, manager_id: str) -> None:
-        """Инициализация ошибки отсутствия менеджера."""
-        self.manager_id = manager_id
-        super().__init__(f'Менеджер с id {manager_id} не найден')
-
-
-class ManagerRoleError(CafeError):
-    """Пользователь не является менеджером."""
-
-    def __init__(self, user_id: str) -> None:
-        """Инициализация ошибки неверной роли пользователя."""
-        self.user_id = user_id
-        super().__init__(f'Пользователь {user_id} не является менеджером')
+    pass
