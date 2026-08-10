@@ -221,8 +221,14 @@ LOG_DATEFMT: str = '%Y-%m-%d %H:%M:%S'
 TABLE_SLOT_ADVANCE_DAYS: int = 30
 """Количество дней вперёд для автоматического создания TableSlot."""
 
+DEFAULT_PHONE_REGION: str = 'RU'
+"""Дефолтный регион номера телефона."""
+
 E164_RU_NUMBER = Annotated[
     Union[str, PhoneNumber],
-    PhoneNumberValidator(default_region='RU', number_format='E164'),
+    PhoneNumberValidator(
+        default_region=DEFAULT_PHONE_REGION,
+        number_format='E164',
+    ),
 ]
-"""Тип данных для номера телефона в формате E164 с дефолтным кодом RU."""
+"""Тип данных для номера телефона в формате E164."""

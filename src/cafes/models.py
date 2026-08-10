@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from src.core.constants import (
     ADDRESS_MAX_LENGTH,
@@ -14,6 +14,7 @@ from src.core.constants import (
     PHONE_MAX_LENGTH,
 )
 from src.db.base import Base
+from src.db.utils import validate_and_format_phone
 
 if TYPE_CHECKING:
     from src.db.models_for_alembic import Slot, Table, User
@@ -65,6 +66,11 @@ class Cafe(Base):
         cascade='all, delete-orphan',
         lazy='selectin',
     )
+
+    @validates('phone')
+    def validate_phone(self, key: str, phone: str) -> str:
+        """Валидация номера телефона (обёртка над утилитой)."""
+        return validate_and_format_phone(phone)
 
     def __repr__(self) -> str:
         """Строковое представление кафе для отладки."""
