@@ -8,7 +8,6 @@ from src.auth.dependencies import get_user_by_role
 from src.cafes.errors import (
     CafeDuplicateError,
     CafeNotFoundError,
-    DuplicateManagersError,
     EmptyManagersListError,
     ManagerNotFoundError,
     ManagerRoleError,
@@ -45,14 +44,13 @@ async def create_cafe(
     """Создает новое кафе."""
     try:
         return await cafe_service.create_cafe(
-            data=cafe_in,
+            obj_in=cafe_in,
             current_user=current_user,
             session=session,
         )
     except (
         CafeDuplicateError,
         EmptyManagersListError,
-        DuplicateManagersError,
         ManagerRoleError,
     ) as error:
         raise HTTPException(

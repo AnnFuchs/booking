@@ -16,12 +16,6 @@ class EmptyManagersListError(Exception):
     pass
 
 
-class DuplicateManagersError(Exception):
-    """Ошибка при передаче дубликатов в списке менеджеров."""
-
-    pass
-
-
 class ManagerNotFoundError(Exception):
     """Ошибка при отсутствии менеджера с переданным ID в базе."""
 
@@ -30,5 +24,17 @@ class ManagerNotFoundError(Exception):
 
 class ManagerRoleError(Exception):
     """Ошибка при несоотстветствии роли пользователя менеджерской."""
+
+    pass
+
+
+class ManagerListIncorrectError(Exception):
+    """Ошибка при невалидных значениях в листе менеджеров."""
+
+    pass
+
+
+class CafeManagerAlreadyBusyError(Exception):
+    """Менеджер уже привязан к другому кафе."""
 
     pass

@@ -1,5 +1,5 @@
-import uuid
 from typing import Any, Optional
+from uuid import UUID
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +33,7 @@ class UserCRUD(CRUDBase[User]):
         self,
         session: AsyncSession,
         filters: dict[str, Any],
-        exclude_id: uuid.UUID | None = None,
+        exclude_id: UUID | None = None,
     ) -> Optional[User]:
         """Получение пользователя, соответствующего хотя бы одному фильтру."""
         conditions = build_filter_conditions(self.model, filters)

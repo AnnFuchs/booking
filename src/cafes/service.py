@@ -4,17 +4,16 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.cafes.crud import cafe_crud
-from src.cafes.errors import (
-    ManagerNotFoundError,
-    ManagerRoleError,
-)
+from src.cafes.errors import CafeManagerAlreadyBusyError
 from src.cafes.schemas import CafeCreate, CafeUpdate
-from src.cafes.validators import validate_cafe_name_address_unique
+from src.cafes.validators import (
+    validate_cafe_name_address_unique,
+    validate_managers_id,
+)
 from src.core.constants import Role
 from src.core.logger import get_logger
 from src.db.models_for_alembic import Cafe, User
 from src.db.utils import get_or_404
-from src.users.crud import user_crud
 
 logger = get_logger(__name__)
 
@@ -27,28 +26,35 @@ async def _assign_managers(
     """Назначает менеджеров кафе, обновляя их cafe_id.
 
     Raises:
-        ManagerNotFoundError: Если менеджер с указанным ID не найден
-        ManagerRoleError: Если пользователь не является менеджером
+        ManagerNotFoundError: Если менеджер с указанным ID не найден.
+        ManagerRoleError: Если пользователь не является менеджером.
+        CafeManagerAlreadyBusyError: Если менеджер уже привязан к другому кафе.
 
     """
-    previous_managers = await user_crud.get_multi(
-        session,
-        filters={'cafe_id': cafe.id, 'role': Role.MANAGER},
-    )
-    for manager in previous_managers:
-        manager.cafe_id = None
+    unique_ids = list(set(managers_id))
 
-    for manager_id in managers_id:
-        user = await session.get(User, manager_id)
-        if user is None:
-            logger.warning('Пользователь с id %s не найден.', manager_id)
-            raise ManagerNotFoundError(f'Менеджер с id {manager_id} не найден')
-        if user.role != Role.MANAGER:
+    if cafe.managers is not None:
+        for manager in cafe.managers:
+            if manager.id not in unique_ids:
+                manager.cafe_id = None
+
+    valid_managers = await validate_managers_id(
+        session=session,
+        managers_id=unique_ids,
+        required_role=Role.MANAGER,
+    )
+
+    for manager_id in unique_ids:
+        user = valid_managers[manager_id]
+        if user.cafe_id is not None and user.cafe_id != cafe.id:
             logger.warning(
-                'Пользователь %s не является менеджером.',
+                'Менеджер %s уже назначен на кафе %s',
                 manager_id,
+                user.cafe_id,
             )
-            raise ManagerRoleError(str(manager_id))
+            raise CafeManagerAlreadyBusyError(
+                f'Менеджер {manager_id} уже назначен на кафе {user.cafe_id}',
+            )
         user.cafe_id = cafe.id
 
 
@@ -57,7 +63,7 @@ class CafeService:
 
     async def create_cafe(
         self,
-        data: CafeCreate,
+        obj_in: CafeCreate,
         current_user: User,
         session: AsyncSession,
     ) -> Cafe:
@@ -68,33 +74,37 @@ class CafeService:
         logger.debug(
             'Пользователь %s создаёт кафе "%s".',
             current_user.id,
-            data.name,
+            obj_in.name,
         )
 
         await validate_cafe_name_address_unique(
-            name=data.name,
-            address=data.address,
+            name=obj_in.name,
+            address=obj_in.address,
             session=session,
         )
 
         cafe = await cafe_crud.create(
-            obj_in=data,
             session=session,
+            obj_in=obj_in,
             exclude_fields={'managers_id'},
             commit=False,
         )
+
         logger.debug('Запланировано создание кафе %s.', cafe.id)
 
-        if data.managers_id:
-            await _assign_managers(session, cafe, data.managers_id)
+        if obj_in.managers_id:
+            await _assign_managers(session, cafe, obj_in.managers_id)
             logger.debug(
                 'Назначены менеджеры %s для кафе %s.',
-                data.managers_id,
+                obj_in.managers_id,
                 cafe.id,
             )
+
         await session.commit()
         await session.refresh(cafe)
+
         logger.debug('Создано кафе %s.', cafe.id)
+
         return cafe
 
     async def get_cafes(

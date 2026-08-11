@@ -127,9 +127,6 @@ MESSAGE_DUPLICATE_NAME_AND_ADDRESS: str = (
 MESSAGE_MANAGERS_ID_IS_NULL: str = 'Список managers_id не может быть пустым.'
 """Сообщение, если предан пустой список managers_id"""
 
-MESSAGE_MANAGERS_ID_DUPLICATE: str = 'Список managers_id содержит дубликаты.'
-"""Сообщение, если в списке managers_id находятся дубликаты."""
-
 MESSAGE_CAPACITY_MORE_ONE: str = 'capacity должен быть >= 1.'
 """Сообщение, если в поле capacity передано значение меньше 1."""
 
