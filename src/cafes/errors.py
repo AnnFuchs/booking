@@ -11,7 +11,7 @@ class CafeNotFoundError(Exception):
 
 
 class EmptyManagersListError(Exception):
-    """Ошибка при передаче пустого списка менеджеров."""
+    """Ошибка при передаче пустого списка менеджеров или его отсуствии."""
 
     pass
 
@@ -35,6 +35,12 @@ class ManagerListIncorrectError(Exception):
 
 
 class CafeManagerAlreadyBusyError(Exception):
-    """Менеджер уже привязан к другому кафе."""
+    """Ошибка при существовании привязки менеджера к другому кафе."""
+
+    pass
+
+
+class ManagerNotBusyError(Exception):
+    """Ошибка при отсутствии привязки менеджера к какому-либо кафе."""
 
     pass

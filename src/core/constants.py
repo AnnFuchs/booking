@@ -101,6 +101,8 @@ ERROR_IMAGE_SAVE_FAILED: str = 'Не удалось сохранить изоб�
 # Доп константы аутентификации и управления пользователями
 TOKEN_FORMAT: str = 'JWT'
 STAFF_ROLE: tuple[Role, Role] = (Role.ADMIN, Role.MANAGER)
+MANAGER_ROLE: tuple[Role, Role] = (Role.MANAGER)
+NOT_ADMIN_ROLE: tuple[Role, Role] = (Role.MANAGER, Role.USER)
 ALL_ROLE: tuple[Role, Role, Role] = (Role.ADMIN, Role.MANAGER, Role.USER)
 ADMIN_ONLY_UPDATE_FIELDS: tuple[str, str] = ('role', 'is_active')
 

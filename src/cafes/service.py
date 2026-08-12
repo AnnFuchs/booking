@@ -4,16 +4,20 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.cafes.crud import cafe_crud
-from src.cafes.errors import CafeManagerAlreadyBusyError
+from src.cafes.errors import (
+    CafeManagerAlreadyBusyError,
+    CafeNotFoundError,
+    EmptyManagersListError,
+)
 from src.cafes.schemas import CafeCreate, CafeUpdate
 from src.cafes.validators import (
+    check_manager_is_working,
     validate_cafe_name_address_unique,
     validate_managers_id,
 )
-from src.core.constants import Role
+from src.core.constants import MANAGER_ROLE, STAFF_ROLE, Role
 from src.core.logger import get_logger
 from src.db.models_for_alembic import Cafe, User
-from src.db.utils import get_or_404
 
 logger = get_logger(__name__)
 
@@ -99,6 +103,14 @@ class CafeService:
                 obj_in.managers_id,
                 cafe.id,
             )
+        else:
+            logger.warning(
+                'Список менеджеров для кафе %s не передан при создании.',
+                cafe.id,
+            )
+            raise EmptyManagersListError(
+                'Для создания кафе необходимо передать список менеджеров.',
+            )
 
         await session.commit()
         await session.refresh(cafe)
@@ -116,23 +128,20 @@ class CafeService:
         """Получение списка кафе.
 
         Юзеры - получает все активные кафе
-        Менеджеры - получает только то кафе в котором он работает работает
+        Менеджеры - получает только то кафе, в котором он работает
         Администраторы - получает все кафе
         """
         filters: dict[str, Any] = {}
 
-        match current_user.role:
-            case Role.ADMIN:
-                if is_active is not None:
-                    filters['is_active'] = is_active
+        if current_user.role in STAFF_ROLE:
+            if is_active is not None:
+                filters['is_active'] = is_active
+        else:
+            filters['is_active'] = True
 
-            case Role.MANAGER:
-                filters['id'] = current_user.cafe_id
-                if is_active is not None:
-                    filters['is_active'] = is_active
-
-            case _:
-                filters['is_active'] = True
+        if current_user.role in MANAGER_ROLE:
+            await check_manager_is_working(current_user)
+            filters['id'] = current_user.cafe_id
 
         cafes = await cafe_crud.get_multi(
             session=session,
@@ -159,24 +168,21 @@ class CafeService:
         """
         filters: dict[str, Any] = {}
 
-        match current_user.role:
-            case Role.USER:
-                filters['is_active'] = True
+        if current_user.role not in STAFF_ROLE:
+            filters['is_active'] = True
+        elif current_user.role in MANAGER_ROLE:
+            await check_manager_is_working(current_user)
+            filters['id'] = current_user.cafe_id
 
-            case Role.MANAGER:
-                filters['id'] = current_user.cafe_id
-
-            case _:
-                pass
-
-        cafe = await get_or_404(
+        cafe = await cafe_crud.get(
             session,
-            cafe_crud,
             cafe_id,
-            detail='Данные не найдены',
             filters=filters or None,
-            log_msg=f'Кафе с id {cafe_id} не найдено.',
         )
+        if not cafe:
+            logger.warning('Кафе с id %s не найдено.', cafe_id)
+            raise CafeNotFoundError(f'Кафе с id {cafe_id} не найдено')
+
         logger.debug(
             'Получено кафе %s для пользователя %s',
             cafe_id,
@@ -215,14 +221,12 @@ class CafeService:
                 exclude_id=cafe_id,
             )
 
-        # update_data_without_managers = data.model_copy(
-        #     update={'managers_id': None},
-        # )
         updated_cafe = await cafe_crud.update(
             db_obj=cafe,
             obj_in=data,
             session=session,
             exclude_fields={'managers_id'},
+            commit=False,
         )
         if data.managers_id is not None:
             await _assign_managers(session, updated_cafe, data.managers_id)
@@ -231,8 +235,12 @@ class CafeService:
                 data.managers_id,
                 cafe_id,
             )
-        await session.refresh(updated_cafe)
+
+        await session.commit()
+        await session.refresh(updated_cafe, attribute_names=['managers'])
+
         logger.debug('Обновлено кафе %s.', cafe_id)
+
         return updated_cafe
 
 

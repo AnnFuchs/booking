@@ -10,6 +10,34 @@ CUSTOM_ERROR_SCHEMA = {
     'title': 'CustomError',
 }
 
+
+def _error(status: int, description: str) -> dict:
+    """Возвращает словарь с кодом ответа и стандартной структурой ошибки."""
+    return {
+        status: {
+            'description': description,
+            'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
+        },
+    }
+
+
+# Общие ошибочные ответы
+UNAUTHORIZED = _error(
+    HTTPStatus.UNAUTHORIZED,
+    'Неавторизированный пользователь',
+)
+FORBIDDEN = _error(HTTPStatus.FORBIDDEN, 'Доступ запрещен')
+NOT_FOUND = _error(HTTPStatus.NOT_FOUND, 'Данные не найдены')
+CONFLICT = _error(
+    HTTPStatus.CONFLICT,
+    'Кафе с таким названием и адресом уже существует',
+)
+UNPROCESSABLE = _error(
+    HTTPStatus.UNPROCESSABLE_ENTITY,
+    'Ошибка валидации данных',
+)
+BAD_REQUEST = _error(HTTPStatus.BAD_REQUEST, 'Ошибка в параметрах запроса')
+
 # Responses для GET /cafes (список кафе)
 CAFES_LIST_RESPONSES = {
     HTTPStatus.OK.value: {
@@ -23,14 +51,8 @@ CAFES_LIST_RESPONSES = {
             },
         },
     },
-    HTTPStatus.UNAUTHORIZED.value: {
-        'description': 'Неавторизированный пользователь',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.UNPROCESSABLE_ENTITY.value: {
-        'description': 'Ошибка валидации данных',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
+    **UNAUTHORIZED,
+    **UNPROCESSABLE,
 }
 
 # Responses для POST /cafes (создание кафе)
@@ -43,26 +65,11 @@ CAFE_CREATE_RESPONSES = {
             },
         },
     },
-    HTTPStatus.BAD_REQUEST.value: {
-        'description': 'Ошибка в параметрах запроса',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.UNAUTHORIZED.value: {
-        'description': 'Неавторизированный пользователь',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.FORBIDDEN.value: {
-        'description': 'Доступ запрещен',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.CONFLICT.value: {
-        'description': 'Кафе с таким названием и адресом уже существует',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.UNPROCESSABLE_ENTITY.value: {
-        'description': 'Ошибка валидации данных',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
+    **BAD_REQUEST,
+    **UNAUTHORIZED,
+    **FORBIDDEN,
+    **CONFLICT,
+    **UNPROCESSABLE,
 }
 
 # Responses для GET /cafes/{cafe_id} (получение по ID)
@@ -75,26 +82,11 @@ CAFE_GET_BY_ID_RESPONSES = {
             },
         },
     },
-    HTTPStatus.BAD_REQUEST.value: {  # ← ДОБАВИТЬ
-        'description': 'Ошибка в параметрах запроса',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.UNAUTHORIZED.value: {
-        'description': 'Неавторизированный пользователь',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.FORBIDDEN.value: {
-        'description': 'Доступ запрещен',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.NOT_FOUND.value: {
-        'description': 'Данные не найдены',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.UNPROCESSABLE_ENTITY.value: {
-        'description': 'Ошибка валидации данных',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
+    **BAD_REQUEST,
+    **UNAUTHORIZED,
+    **FORBIDDEN,
+    **NOT_FOUND,
+    **UNPROCESSABLE,
 }
 
 # Responses для PATCH /cafes/{cafe_id} (обновление кафе)
@@ -107,28 +99,10 @@ CAFE_UPDATE_RESPONSES = {
             },
         },
     },
-    HTTPStatus.BAD_REQUEST.value: {  # ← ДОБАВИТЬ
-        'description': 'Ошибка в параметрах запроса',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.UNAUTHORIZED.value: {
-        'description': 'Неавторизированный пользователь',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.FORBIDDEN.value: {
-        'description': 'Доступ запрещен',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.NOT_FOUND.value: {
-        'description': 'Данные не найдены',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.CONFLICT.value: {
-        'description': 'Кафе с таким названием и адресом уже существует',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
-    HTTPStatus.UNPROCESSABLE_ENTITY.value: {
-        'description': 'Ошибка валидации данных',
-        'content': {'application/json': {'schema': CUSTOM_ERROR_SCHEMA}},
-    },
+    **BAD_REQUEST,
+    **UNAUTHORIZED,
+    **FORBIDDEN,
+    **NOT_FOUND,
+    **CONFLICT,
+    **UNPROCESSABLE,
 }

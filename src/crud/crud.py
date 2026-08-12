@@ -149,6 +149,7 @@ class CRUDBase(Generic[ModelType]):
         db_obj: ModelType,
         obj_in: Any,
         exclude_fields: set[str] | None = None,
+        commit: bool = True,
     ) -> ModelType:
         """Обновить существующий объект в БД.
 
@@ -158,6 +159,7 @@ class CRUDBase(Generic[ModelType]):
             obj_in: Pydantic схема с данными для обновления
                 (exclude_unset=True)
             exclude_fields: поля не входящие в схему
+            commit: нужно ли осуществлять коммит
 
         Returns:
             Обновленный объект модели
@@ -178,8 +180,11 @@ class CRUDBase(Generic[ModelType]):
         )
         for field in valid_fields:
             setattr(db_obj, field, update_data[field])
-        await session.commit()
-        await session.refresh(db_obj)
+        if commit:
+            await session.commit()
+            await session.refresh(db_obj)
+        else:
+            await session.flush()
         return db_obj
 
     async def get_by_attribute(

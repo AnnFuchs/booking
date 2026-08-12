@@ -6,6 +6,7 @@ from src.cafes.crud import cafe_crud
 from src.cafes.errors import (
     CafeDuplicateError,
     EmptyManagersListError,
+    ManagerNotBusyError,
     ManagerNotFoundError,
     ManagerRoleError,
 )
@@ -66,7 +67,9 @@ async def validate_managers_id(
         filters={'id__in': managers_id},
     )
 
-    existing_users_map = {user.id: user for user in existing_users}
+    existing_users_map: dict[UUID, User] = {
+        user.id: user for user in existing_users
+    }
 
     for manager_id in managers_id:
         user = existing_users_map.get(manager_id)
@@ -83,3 +86,16 @@ async def validate_managers_id(
             )
 
     return existing_users_map
+
+
+async def check_manager_is_working(manager: User) -> User:
+    """Проверяет, привязан ли менеджер хотя бы к 1 кафе."""
+    if manager.cafe_id is None:
+        logger.warning(
+            'Менеджер %s не привязан ни к одному кафе',
+            manager.id,
+        )
+        raise ManagerNotBusyError(
+            f'Менеджер {manager.id} не привязан ни к одному кафе',
+        )
+    return manager
