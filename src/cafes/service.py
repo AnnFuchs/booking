@@ -18,6 +18,7 @@ from src.cafes.validators import (
 from src.core.constants import MANAGER_ROLE, STAFF_ROLE, Role
 from src.core.logger import get_logger
 from src.db.models_for_alembic import Cafe, User
+from src.users.crud import user_crud
 
 logger = get_logger(__name__)
 
@@ -37,10 +38,14 @@ async def _assign_managers(
     """
     unique_ids = list(set(managers_id))
 
-    if cafe.managers is not None:
-        for manager in cafe.managers:
-            if manager.id not in unique_ids:
-                manager.cafe_id = None
+    current_managers = await user_crud.get_multi(
+        session=session,
+        filters={'cafe_id': cafe.id},
+    )
+
+    for manager in current_managers:
+        if manager.id not in unique_ids:
+            manager.cafe_id = None
 
     valid_managers = await validate_managers_id(
         session=session,
@@ -112,8 +117,13 @@ class CafeService:
                 'Для создания кафе необходимо передать список менеджеров.',
             )
 
+        new_cafe_id = cafe.id
         await session.commit()
-        await session.refresh(cafe)
+
+        cafe = await cafe_crud.get_cafe_with_managers_preload(
+            session=session,
+            cafe_id=new_cafe_id,
+        )
 
         logger.debug('Создано кафе %s.', cafe.id)
 
@@ -237,7 +247,10 @@ class CafeService:
             )
 
         await session.commit()
-        await session.refresh(updated_cafe, attribute_names=['managers'])
+        updated_cafe = await cafe_crud.get_cafe_with_managers_preload(
+            session=session,
+            cafe_id=cafe_id,
+        )
 
         logger.debug('Обновлено кафе %s.', cafe_id)
 

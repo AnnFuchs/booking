@@ -10,7 +10,6 @@ from pydantic import (
     field_validator,
 )
 
-from src.cafes.validators import validate_managers_id
 from src.core.constants import (
     ADDRESS_MAX_LENGTH,
     DESCRIPTION_MAX_LENGTH,
@@ -45,10 +44,6 @@ class CafeCreate(CafeBase):
 
     managers_id: list[uuid.UUID]
 
-    _validate_managers_id = field_validator('managers_id')(
-        validate_managers_id,
-    )
-
 
 class CafeUpdate(BaseModel):
     """Схема для частичного обновления кафе."""
@@ -69,10 +64,6 @@ class CafeUpdate(BaseModel):
     photo_id: uuid.UUID | None = None
     managers_id: list[uuid.UUID] | None = None
     is_active: bool | None = None
-
-    _validate_managers_id = field_validator('managers_id')(
-        validate_managers_id,
-    )
 
     @field_validator(
         'name',
