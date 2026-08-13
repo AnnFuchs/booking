@@ -194,8 +194,6 @@ def check_all_fields_valid(
     Извлекает данные из Pydantic-схемы с учётом параметров `by_alias`
     и `exclude_unset`, исключает указанные поля, добавляет `extra_data`
     и проверяет все итоговые ключи на принадлежность к колонкам модели.
-    Также валидирует сами `exclude_fields`, заменяя их на подмножество
-    реально существующих колонок.
 
     Args:
         model: Модель SQLAlchemy.
@@ -215,27 +213,18 @@ def check_all_fields_valid(
             отсутствующие среди колонок модели.
 
     """
-    if exclude_fields:
-        valid_exclude_fields, _ = validate_fields_exist(
-            model,
-            exclude_fields,
-        )
-        valid_exclude_fields = set(valid_exclude_fields)
-    else:
-        valid_exclude_fields = set()
-
     if by_alias:
         obj_in_data = obj_in.model_dump(
             by_alias=by_alias,
-            exclude=valid_exclude_fields,
+            exclude=exclude_fields,
         )
     elif exclude_unset:
         obj_in_data = obj_in.model_dump(
             exclude_unset=exclude_unset,
-            exclude=valid_exclude_fields,
+            exclude=exclude_fields,
         )
     else:
-        obj_in_data = obj_in.model_dump(exclude=valid_exclude_fields)
+        obj_in_data = obj_in.model_dump(exclude=exclude_fields)
 
     if extra_data:
         obj_in_data.update(extra_data)

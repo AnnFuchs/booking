@@ -101,6 +101,8 @@ ERROR_IMAGE_SAVE_FAILED: str = 'Не удалось сохранить изоб�
 # Доп константы аутентификации и управления пользователями
 TOKEN_FORMAT: str = 'JWT'
 STAFF_ROLE: tuple[Role, Role] = (Role.ADMIN, Role.MANAGER)
+MANAGER_ROLE: tuple[Role, Role] = (Role.MANAGER)
+NOT_ADMIN_ROLE: tuple[Role, Role] = (Role.MANAGER, Role.USER)
 ALL_ROLE: tuple[Role, Role, Role] = (Role.ADMIN, Role.MANAGER, Role.USER)
 ADMIN_ONLY_UPDATE_FIELDS: tuple[str, str] = ('role', 'is_active')
 
@@ -126,9 +128,6 @@ MESSAGE_DUPLICATE_NAME_AND_ADDRESS: str = (
 
 MESSAGE_MANAGERS_ID_IS_NULL: str = 'Список managers_id не может быть пустым.'
 """Сообщение, если предан пустой список managers_id"""
-
-MESSAGE_MANAGERS_ID_DUPLICATE: str = 'Список managers_id содержит дубликаты.'
-"""Сообщение, если в списке managers_id находятся дубликаты."""
 
 MESSAGE_CAPACITY_MORE_ONE: str = 'capacity должен быть >= 1.'
 """Сообщение, если в поле capacity передано значение меньше 1."""
@@ -221,8 +220,14 @@ LOG_DATEFMT: str = '%Y-%m-%d %H:%M:%S'
 TABLE_SLOT_ADVANCE_DAYS: int = 30
 """Количество дней вперёд для автоматического создания TableSlot."""
 
+DEFAULT_PHONE_REGION: str = 'RU'
+"""Дефолтный регион номера телефона."""
+
 E164_RU_NUMBER = Annotated[
     Union[str, PhoneNumber],
-    PhoneNumberValidator(default_region='RU', number_format='E164'),
+    PhoneNumberValidator(
+        default_region=DEFAULT_PHONE_REGION,
+        number_format='E164',
+    ),
 ]
-"""Тип данных для номера телефона в формате E164 с дефолтным кодом RU."""
+"""Тип данных для номера телефона в формате E164."""

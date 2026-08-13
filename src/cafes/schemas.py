@@ -1,9 +1,15 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
 
-from src.cafes.validators import validate_managers_id
 from src.core.constants import (
     ADDRESS_MAX_LENGTH,
     DESCRIPTION_MAX_LENGTH,
@@ -32,26 +38,11 @@ class CafeBase(BaseModel):
     )
     photo_id: uuid.UUID | None = None
 
-    @field_validator('phone')
-    @classmethod
-    def validate_phone(cls, v: str) -> str:
-        """Валидация номера телефона."""
-        v = str(v)
-        if not v.startswith('+7'):
-            raise ValueError('Номер телефона должен начинаться с +7')
-        if len(v) != 12:
-            raise ValueError('Номер телефона должен содержать 12 символов')
-        return v
-
 
 class CafeCreate(CafeBase):
     """Схема для создания нового кафе."""
 
     managers_id: list[uuid.UUID]
-
-    _validate_managers_id = field_validator('managers_id')(
-        validate_managers_id,
-    )
 
 
 class CafeUpdate(BaseModel):
@@ -74,22 +65,19 @@ class CafeUpdate(BaseModel):
     managers_id: list[uuid.UUID] | None = None
     is_active: bool | None = None
 
-    _validate_managers_id = field_validator('managers_id')(
-        validate_managers_id,
+    @field_validator(
+        'name',
+        'address',
+        'phone',
+        'managers_id',
+        mode='before',
     )
-
-    @field_validator('phone')
     @classmethod
-    def validate_phone(cls, v: str) -> str:
-        """Валидация номера телефона."""
-        if v is None:
-            return v
-        v = str(v)
-        if not v.startswith('+7'):
-            raise ValueError('Номер телефона должен начинаться с +7')
-        if len(v) != 12:
-            raise ValueError('Номер телефона должен содержать 12 символов')
-        return v
+    def prevent_none(cls, value: Any, info: ValidationInfo) -> Any:
+        """Запрещает передачу явного None (null) для обязательных полей."""
+        if value is None:
+            raise ValueError(f'Поле {info.field_name} не может быть null')
+        return value
 
 
 class CafeShortInfo(CafeBase):

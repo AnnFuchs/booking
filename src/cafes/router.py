@@ -7,9 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.dependencies import get_user_by_role
 from src.cafes.errors import (
     CafeDuplicateError,
+    CafeManagerAlreadyBusyError,
     CafeNotFoundError,
-    DuplicateManagersError,
     EmptyManagersListError,
+    ManagerNotBusyError,
     ManagerNotFoundError,
     ManagerRoleError,
 )
@@ -45,15 +46,16 @@ async def create_cafe(
     """Создает новое кафе."""
     try:
         return await cafe_service.create_cafe(
-            data=cafe_in,
+            obj_in=cafe_in,
             current_user=current_user,
             session=session,
         )
     except (
         CafeDuplicateError,
         EmptyManagersListError,
-        DuplicateManagersError,
         ManagerRoleError,
+        CafeManagerAlreadyBusyError,
+        ValueError,
     ) as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -83,11 +85,17 @@ async def get_cafes(
     Для менеджеров — только своё кафе
     Для пользователей — только активные кафе
     """
-    return await cafe_service.get_cafes(
-        current_user=current_user,
-        session=session,
-        is_active=is_active,
-    )
+    try:
+        return await cafe_service.get_cafes(
+            current_user=current_user,
+            session=session,
+            is_active=is_active,
+        )
+    except ManagerNotBusyError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        )
 
 
 @router.get(
@@ -113,6 +121,11 @@ async def get_cafe_by_id(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(error),
         )
+    except ManagerNotBusyError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        )
 
 
 @router.patch(
@@ -131,9 +144,27 @@ async def update_cafe(
 
     Только для администраторов и менеджеров
     """
-    return await cafe_service.update_cafe(
-        cafe_id=cafe_id,
-        data=data,
-        current_user=current_user,
-        session=session,
-    )
+    try:
+        return await cafe_service.update_cafe(
+            cafe_id=cafe_id,
+            data=data,
+            current_user=current_user,
+            session=session,
+        )
+    except (CafeNotFoundError, ManagerNotFoundError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        )
+    except (
+        CafeDuplicateError,
+        ManagerNotBusyError,
+        ValueError,
+        CafeManagerAlreadyBusyError,
+        EmptyManagersListError,
+        ManagerRoleError,
+    ) as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        )

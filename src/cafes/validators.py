@@ -1,20 +1,23 @@
-import uuid
+from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.cafes.crud import cafe_crud
 from src.cafes.errors import (
     CafeDuplicateError,
-    DuplicateManagersError,
     EmptyManagersListError,
+    ManagerNotBusyError,
+    ManagerNotFoundError,
+    ManagerRoleError,
 )
 from src.core.constants import (
     MESSAGE_DUPLICATE_NAME_AND_ADDRESS,
-    MESSAGE_MANAGERS_ID_DUPLICATE,
     MESSAGE_MANAGERS_ID_IS_NULL,
+    Role,
 )
 from src.core.logger import get_logger
-from src.db.models_for_alembic import Cafe
+from src.db.models_for_alembic import User
+from src.users.crud import user_crud
 
 logger = get_logger(__name__)
 
@@ -23,7 +26,7 @@ async def validate_cafe_name_address_unique(
     name: str,
     address: str,
     session: AsyncSession,
-    exclude_id: uuid.UUID | None = None,  # чтобы исключить самого себя
+    exclude_id: UUID | None = None,
 ) -> None:
     """Проверяет, что связка name + address уникальна.
 
@@ -35,15 +38,12 @@ async def validate_cafe_name_address_unique(
                     (используется при обновлении)
 
     """
-    query = select(Cafe).where(
-        Cafe.name == name,
-        Cafe.address == address,
+    potential_duplicate = await cafe_crud.get_by_name_and_adress(
+        name=name,
+        address=address,
+        session=session,
     )
-    if exclude_id is not None:
-        query = query.where(Cafe.id != exclude_id)
-    result = await session.execute(query)
-    cafe = result.scalars().first()
-    if cafe:
+    if potential_duplicate and potential_duplicate.id != exclude_id:
         logger.warning(
             'Кафе с названием %s и адресом %s уже есть в базе данных',
             name,
@@ -52,32 +52,50 @@ async def validate_cafe_name_address_unique(
         raise CafeDuplicateError(MESSAGE_DUPLICATE_NAME_AND_ADDRESS)
 
 
-def validate_managers_id(
-    value: list[uuid.UUID] | None,
-) -> list[uuid.UUID] | None:
-    """Проверка списка managers_id на пустоту и дубликаты.
-
-    Args:
-    value: Список ID менеджеров
-
-    Returns:
-        list[uuid.UUID] | None: Исходный список без изменений
-
-    Raises:
-        EmptyManagersListError: Если список пуст
-        DuplicateManagersError: Если в списке есть дубликаты
-
-    """
-    if value is None:
-        logger.debug('Передан пустой список.')
-        return value
-
-    if not value:
-        logger.warning('Cписок менеджеров не передан.')
+async def validate_managers_id(
+    session: AsyncSession,
+    managers_id: list[UUID],
+    required_role: Role,
+) -> dict[UUID, User]:
+    """Валидация списка managers_id."""
+    if not managers_id:
+        logger.warning('Передан пустой список менеджеров.')
         raise EmptyManagersListError(MESSAGE_MANAGERS_ID_IS_NULL)
 
-    if len(value) != len(set(value)):
-        logger.warning('В списке менеджеров дубликаты.')
-        raise DuplicateManagersError(MESSAGE_MANAGERS_ID_DUPLICATE)
+    existing_users = await user_crud.get_multi(
+        session=session,
+        filters={'id__in': managers_id},
+    )
 
-    return value
+    existing_users_map: dict[UUID, User] = {
+        user.id: user for user in existing_users
+    }
+
+    for manager_id in managers_id:
+        user = existing_users_map.get(manager_id)
+        if user is None:
+            logger.warning('Пользователь с id %s не найден.', manager_id)
+            raise ManagerNotFoundError(f'Менеджер с id {manager_id} не найден')
+        if user.role != required_role:
+            logger.warning(
+                'Пользователь %s не является менеджером.',
+                manager_id,
+            )
+            raise ManagerRoleError(
+                f'Роль пользователя {manager_id} не корректна',
+            )
+
+    return existing_users_map
+
+
+async def check_manager_is_working(manager: User) -> User:
+    """Проверяет, привязан ли менеджер хотя бы к 1 кафе."""
+    if manager.cafe_id is None:
+        logger.warning(
+            'Менеджер %s не привязан ни к одному кафе',
+            manager.id,
+        )
+        raise ManagerNotBusyError(
+            f'Менеджер {manager.id} не привязан ни к одному кафе',
+        )
+    return manager
