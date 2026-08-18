@@ -1,4 +1,5 @@
 from datetime import date, time
+from typing import Sequence
 from uuid import UUID
 
 from sqlalchemy import func, select, tuple_, update
@@ -291,4 +292,22 @@ class BookingCRUD(CRUDBase[Booking]):
         return booking
 
 
+class CRUDTableSlot(CRUDBase[TableSlot]):
+    """CRUD для модели TableSlot."""
+
+    async def bulk_create(
+        self,
+        session: AsyncSession,
+        table_slots: Sequence[TableSlot],
+    ) -> None:
+        """Массовое создание TableSlot.
+
+        Выполняет add_all + flush, не коммитит транзакцию,
+        чтобы вызывающий код мог управлять целостностью.
+        """
+        session.add_all(table_slots)
+        await session.flush()
+
+
 booking_crud = BookingCRUD(Booking)
+table_slot_crud = CRUDTableSlot(TableSlot)

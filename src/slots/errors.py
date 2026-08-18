@@ -4,13 +4,7 @@ class SlotOverlapError(Exception):
     pass
 
 
-class SlotNotFoundError(Exception):
-    """Слот не найден."""
-
-    pass
-
-
-class SlotAccessDeniedError(Exception):
-    """Нет доступа к слоту."""
+class SlotTimeOrderError(Exception):
+    """Неверный порядок времени начала и конца слота."""
 
     pass

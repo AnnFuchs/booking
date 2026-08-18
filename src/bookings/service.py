@@ -1,10 +1,10 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.bookings.crud import booking_crud
+from src.bookings.crud import booking_crud, table_slot_crud
 from src.bookings.models import Booking, TableSlot
 from src.bookings.notifications import (
     schedule_notifications_on_create,
@@ -18,8 +18,10 @@ from src.bookings.validators import (
     validate_slot_not_in_past,
     validate_slots_availability,
 )
-from src.core.constants import BookingStatus, Role
+from src.core.constants import TABLE_SLOT_ADVANCE_DAYS, BookingStatus, Role
 from src.core.logger import get_logger
+from src.slots.models import Slot
+from src.tables.crud import table_crud
 from src.users.models import User
 
 logger = get_logger(__name__)
@@ -281,4 +283,58 @@ class BookingService:
         return updated_booking
 
 
+class TableSlotService:
+    """Класс сервиса для управления бизнес-логикой связи столов и слотов."""
+
+    async def create(
+        self,
+        session: AsyncSession,
+        slot: Slot,
+        cafe_id: UUID,
+    ) -> None:
+        """Создаёт TableSlot записи для всех активных столов кафе."""
+        tables = await table_crud.get_multi(
+            session=session,
+            filters={'cafe_id': cafe_id, 'is_active': True},
+        )
+
+        today = datetime.now(timezone.utc).date()
+        first_date = today
+        slot_start_today = datetime.combine(
+            today,
+            slot.start_time,
+            datetime.now().tzinfo,
+        )
+        if slot_start_today <= datetime.now(timezone.utc):
+            first_date = today + timedelta(days=1)
+
+        table_slots = [
+            TableSlot(
+                table_id=table.id,
+                slot_id=slot.id,
+                booking_date=d,
+            )
+            for table in tables
+            for d in (
+                first_date + timedelta(days=delta)
+                for delta in range(
+                    (
+                        today
+                        + timedelta(days=TABLE_SLOT_ADVANCE_DAYS)
+                        - first_date
+                    ).days + 1,
+                )
+            )
+        ]
+
+        if table_slots:
+            await table_slot_crud.bulk_create(session, table_slots)
+            logger.debug(
+                'Создано %d TableSlot записей для слота %s',
+                len(table_slots),
+                slot.id,
+            )
+
+
 booking_service = BookingService()
+table_slot_service = TableSlotService()

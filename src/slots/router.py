@@ -1,13 +1,14 @@
 import uuid  # noqa: I001
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import get_user_by_role
 from src.core.constants import ALL_ROLE, STAFF_ROLE
 from src.core.logger import get_logger
 from src.db.session import get_async_session
+from src.slots.errors import SlotOverlapError
 from src.slots.router_responses import (
     SLOT_CREATE_RESPONSES,
     SLOTS_LIST_RESPONSES,
@@ -48,12 +49,18 @@ async def create_new_time_slot(
         HTTPException: (403) Если недостаточно прав.
 
     """
-    return await slot_service.create_time_slot(
-        session,
-        time_slot,
-        cafe_id,
-        current_user,
-    )
+    try:
+        return await slot_service.create_time_slot(
+            session,
+            time_slot,
+            cafe_id,
+            current_user,
+        )
+    except SlotOverlapError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        )
 
 
 @router.patch(
@@ -76,13 +83,19 @@ async def partially_update_timeslot(
 
     Доступно Только для администраторов и менеджеров.
     """
-    return await slot_service.update_time_slot(
-        session,
-        slot_id,
-        obj_in,
-        cafe_id,
-        current_user,
-    )
+    try:
+        return await slot_service.update_time_slot(
+            session,
+            slot_id,
+            obj_in,
+            cafe_id,
+            current_user,
+        )
+    except (SlotOverlapError, ValueError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        )
 
 
 @router.get(
