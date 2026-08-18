@@ -1,21 +1,44 @@
 import uuid
 from datetime import datetime, time
-from typing import Optional, Self
+from typing import Any, Optional, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from src.cafes.schemas import CafeShortInfo
 from src.core.constants import SLOT_INVALID_TIME_ORDER
 
 
-class TimeSlotCreate(BaseModel):
+class TimeValidationBase(BaseModel):
+    """Базовый класс для слота с валидацией времени."""
+
+    start_time: time = Field(..., description='Время начала слота')
+    end_time: time = Field(..., description='Время окончания слота')
+
+    @model_validator(mode='after')
+    def check_time_order_if_both_provided(self) -> Self:
+        """Проверка порядка времени, если в запросе переданы ОБА поля.
+
+        Это защищает от некорректных запросов вида {start: 20:00, end: 10:00}.
+        """
+        if self.start_time is not None and self.end_time is not None:
+            if self.end_time <= self.start_time:
+                raise ValueError(SLOT_INVALID_TIME_ORDER)
+        return self
+
+
+class TimeSlotCreate(TimeValidationBase):
     """Схема для создания временного слота.
 
     Используется в POST /cafes/{cafe_id}/time_slots
     """
 
-    start_time: time = Field(..., description='Время начала слота')
-    end_time: time = Field(..., description='Время окончания слота')
     description: Optional[str] = Field(None, description='Описание слота')
     model_config = ConfigDict(
         extra='forbid',
@@ -27,13 +50,6 @@ class TimeSlotCreate(BaseModel):
             },
         },
     )
-
-    @model_validator(mode='after')
-    def validate_time_order(self) -> Self:
-        """Проверка что start_time < end_time."""
-        if self.end_time <= self.start_time:
-            raise ValueError(SLOT_INVALID_TIME_ORDER)
-        return self
 
 
 class TimeSlotShortInfo(BaseModel):
@@ -101,7 +117,7 @@ class TimeSlotInfo(BaseModel):
     )
 
 
-class TimeSlotUpdate(BaseModel):
+class TimeSlotUpdate(TimeValidationBase):
     """Схема для обновления временного слота.
 
     Используется в PATCH /cafes/{cafe_id}/time_slots/{slot_id}
@@ -112,13 +128,15 @@ class TimeSlotUpdate(BaseModel):
     description: Optional[str] = Field(None, description='Описание слота')
     is_active: Optional[bool] = Field(None, description='Активен ли слот')
 
-    @model_validator(mode='after')
-    def check_time_order_if_both_provided(self) -> Self:
-        """Проверка порядка времени, если в запросе переданы ОБА поля.
-
-        Это защищает от некорректных запросов вида {start: 20:00, end: 10:00}.
-        """
-        if self.start_time is not None and self.end_time is not None:
-            if self.end_time <= self.start_time:
-                raise ValueError(SLOT_INVALID_TIME_ORDER)
-        return self
+    @field_validator(
+        'start_time',
+        'end_time',
+        'is_active',
+        mode='before',
+    )
+    @classmethod
+    def prevent_none(cls, value: Any, info: ValidationInfo) -> Any:
+        """Запрещает передачу явного None (null) для обязательных полей."""
+        if value is None:
+            raise ValueError(f'Поле {info.field_name} не может быть null')
+        return value
