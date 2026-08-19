@@ -123,3 +123,48 @@ def send_booking_reminder(
             exc,
         )
         raise self.retry(exc=exc)
+
+
+@shared_task(
+    name='notify_user_slot_status_changed',
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,
+)
+def notify_user_slot_status_changed(
+    self: Task,
+    booking_id: str,
+    user_email: str,
+    cafe_name: str,
+    booking_date: str,
+    slot_time: str,
+    table_label: str,
+    reason: str,
+) -> None:
+    """Оповещение пользователя об изменении статуса стола/слота брони."""
+    try:
+        subject = f'Изменение вашего бронирования в {cafe_name}'
+        body = (
+            f'Здравствуйте!\n\n'
+            f'По вашему бронированию #{booking_id} в кафе "{cafe_name}" '
+            f'на {booking_date} в {slot_time} ({table_label}) '
+            f'произошли изменения:\n\n'
+            f'{reason}\n\n'
+            f'Пожалуйста, свяжитесь с администрацией кафе для уточнения '
+            f'деталей или оформите новое бронирование.'
+        )
+        send_email_sync(user_email, subject, body)
+        logger.debug(
+            'Отправлено уведомление пользователю %s об изменении статуса '
+            'стола/слота по бронированию %s',
+            user_email,
+            booking_id,
+        )
+    except Exception as exc:
+        logger.error(
+            'Ошибка отправки уведомления об изменении статуса стола/слота '
+            'для бронирования %s: %s',
+            booking_id,
+            exc,
+        )
+        raise self.retry(exc=exc)

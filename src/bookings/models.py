@@ -101,7 +101,7 @@ class TableSlot(Base):
         ForeignKey('bookings.id', ondelete='SET NULL'),
         nullable=True,
     )
-    booking: Mapped['Booking'] = relationship(
+    booking: Mapped['Booking | None'] = relationship(
         'Booking',
         back_populates='tables_slots',
         lazy='selectin',

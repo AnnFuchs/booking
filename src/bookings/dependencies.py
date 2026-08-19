@@ -29,6 +29,8 @@ async def validate_booking_request(
         db=db,
         booking_date=booking_data.booking_date,
         tables_slots=booking_data.tables_slots,
+        cafe_id=booking_data.cafe_id,
+        for_update=True,
     )
 
 

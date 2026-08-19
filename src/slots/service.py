@@ -158,6 +158,12 @@ class SlotService:
 
             if obj_in.is_active and not time_slot.is_active:
                 await table_slot_service.create(session, slot, cafe_id)
+            if obj_in.is_active is False and time_slot.is_active:
+                await table_slot_service.deactivate_for_slot(
+                    session,
+                    slot.id,
+                    commit=False,
+                )
 
             await session.commit()
             await session.refresh(slot)

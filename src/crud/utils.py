@@ -68,7 +68,9 @@ def build_filter_conditions(
     Поддерживает:
         - field: равенство (field == value)
         - field__gt: больше (field > value)
+        - field__gte: больше или равно (field >= value)
         - field__lt: меньше (field < value)
+        - field__lte: меньше или равно (field <= value)
         - field__in: в списке (field IN value)
         - field__is_null: IS NULL (значение игнорируется)
 
@@ -113,8 +115,12 @@ def build_filter_conditions(
             conditions.append(column == value)
         elif operator == 'gt':
             conditions.append(column > value)
+        elif operator == 'gte':
+            conditions.append(column >= value)
         elif operator == 'lt':
             conditions.append(column < value)
+        elif operator == 'lte':
+            conditions.append(column <= value)
         elif operator == 'in':
             conditions.append(column.in_(value))
         else:
