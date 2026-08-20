@@ -25,6 +25,12 @@ class Booking(Base):
     """Модель для хранения информации о бронированиях столов."""
 
     __tablename__ = 'bookings'
+    __table_args__ = (
+        CheckConstraint(
+            'guest_number > 0',
+            name='check_booking_guest_number_positive',
+        ),
+    )
 
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey('users.id'),
@@ -32,7 +38,6 @@ class Booking(Base):
     )
 
     guest_number: Mapped[int] = mapped_column(
-        CheckConstraint('guest_number > 0'),
         nullable=False,
     )
     note: Mapped[str | None] = mapped_column(String(MAX_BOOKING_COMMENT))
