@@ -31,7 +31,7 @@ class CRUDTimeSlot(CRUDBase[Slot]):
                 Slot.start_time < end_time,
                 Slot.end_time > start_time,
             )
-            .with_for_update()
+            .with_for_update(read=True)
         )
         if exclude_slot_id:
             query = query.where(Slot.id != exclude_slot_id)

@@ -1,16 +1,17 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.bookings.crud import booking_crud
+from src.bookings.crud import booking_crud, table_slot_crud
 from src.bookings.models import Booking, TableSlot
 from src.bookings.notifications import (
     schedule_notifications_on_create,
+    schedule_notifications_on_slot_status_change,
     schedule_notifications_on_update,
 )
-from src.bookings.schemas import BookingCreate, BookingUpdate
+from src.bookings.schemas import BookingCreate, BookingTableSlot, BookingUpdate
 from src.bookings.validators import (
     check_booking_collision,
     validate_booking_access,
@@ -18,8 +19,10 @@ from src.bookings.validators import (
     validate_slot_not_in_past,
     validate_slots_availability,
 )
-from src.core.constants import BookingStatus, Role
+from src.core.constants import TABLE_SLOT_ADVANCE_DAYS, BookingStatus, Role
 from src.core.logger import get_logger
+from src.slots.models import Slot
+from src.tables.crud import table_crud
 from src.users.models import User
 
 logger = get_logger(__name__)
@@ -58,6 +61,7 @@ class BookingService:
             booking_data.cafe_id,
         )
         start_time = table_slots[0].slot.start_time
+        end_time = table_slots[0].slot.end_time
 
         await validate_slot_not_in_past(
             booking_date=booking_data.booking_date,
@@ -68,6 +72,7 @@ class BookingService:
             db=db,
             user_id=user_id,
             start_time=start_time,
+            end_time=end_time,
             booking_date=booking_data.booking_date,
         )
 
@@ -265,11 +270,42 @@ class BookingService:
                 db=db,
                 booking_date=booking_data.booking_date or booking.booking_date,
                 tables_slots=booking_data.tables_slots,
+                cafe_id=booking.cafe_id,
+                for_update=True,
+                current_booking_id=booking.id,
             )
 
             booking.tables_slots = slots_objects
             # Так как slots_object это ORM-объекты, обновляем ORM-связь.
             booking_data.tables_slots = None
+        elif (
+            booking_data.booking_date is not None
+            and booking_data.booking_date != booking.booking_date
+        ):
+            logger.debug(
+                'Запрошено изменение даты без изменения столов для '
+                'бронирования %s, проверяем доступность текущих столов '
+                'на новую дату %s',
+                booking_id,
+                booking_data.booking_date,
+            )
+            same_tables_slots = [
+                BookingTableSlot(
+                    table_id=table_slot.table_id,
+                    slot_id=table_slot.slot_id,
+                )
+                for table_slot in booking.tables_slots
+            ]
+            slots_objects = await validate_slots_availability(
+                db=db,
+                booking_date=booking_data.booking_date,
+                tables_slots=same_tables_slots,
+                cafe_id=booking.cafe_id,
+                for_update=True,
+                current_booking_id=booking.id,
+            )
+
+            booking.tables_slots = slots_objects
 
         updated_booking = await booking_crud.update(
             session=db,
@@ -281,4 +317,176 @@ class BookingService:
         return updated_booking
 
 
+class TableSlotService:
+    """Класс сервиса для управления бизнес-логикой связи столов и слотов."""
+
+    async def create(
+        self,
+        session: AsyncSession,
+        slot: Slot,
+        cafe_id: UUID,
+    ) -> None:
+        """Создаёт TableSlot записи для всех активных столов кафе.
+
+        Идемпотентно: реактивирует уже существующие (ранее деактивированные)
+        записи и создаёт только недостающие, чтобы не нарушать
+        UniqueConstraint('table_id', 'slot_id', 'booking_date').
+        """
+        tables = await table_crud.get_multi(
+            session=session,
+            filters={'cafe_id': cafe_id, 'is_active': True},
+        )
+
+        now_utc = datetime.now(timezone.utc)
+        today = now_utc.date()
+        first_date = today
+        slot_start_today = datetime.combine(
+            today,
+            slot.start_time,
+            timezone.utc,
+        )
+        if slot_start_today <= now_utc:
+            first_date = today + timedelta(days=1)
+
+        dates = [
+            first_date + timedelta(days=delta)
+            for delta in range(
+                (
+                    today
+                    + timedelta(days=TABLE_SLOT_ADVANCE_DAYS)
+                    - first_date
+                ).days + 1,
+            )
+        ]
+
+        expected_pairs = [
+            (table.id, d) for table in tables for d in dates
+        ]
+        if not expected_pairs:
+            return
+
+        existing = await table_slot_crud.get_multi(
+            session=session,
+            filters={
+                'slot_id': slot.id,
+                'table_id__in': [t.id for t in tables],
+                'booking_date__in': dates,
+            },
+        )
+        existing_by_pair = {
+            (ts.table_id, ts.booking_date): ts
+            for ts in existing
+            if ts.booking_date in dates
+        }
+
+        to_reactivate = [
+            ts for ts in existing_by_pair.values() if not ts.is_active
+        ]
+        for ts in to_reactivate:
+            ts.is_active = True
+
+        new_table_slots = [
+            TableSlot(table_id=table_id, slot_id=slot.id, booking_date=d)
+            for table_id, d in expected_pairs
+            if (table_id, d) not in existing_by_pair
+        ]
+
+        if new_table_slots:
+            await table_slot_crud.bulk_create(session, new_table_slots)
+        if new_table_slots or to_reactivate:
+            logger.debug(
+                'Создано %d и реактивировано %d TableSlot для слота %s',
+                len(new_table_slots),
+                len(to_reactivate),
+                slot.id,
+            )
+
+    async def deactivate_for_slot(
+        self,
+        session: AsyncSession,
+        slot_id: UUID,
+        commit: bool = True,
+    ) -> None:
+        """Деактивирует небронированные TableSlot при отключении слота.
+
+        По уже забронированным TableSlot (booking_id заполнен) статус
+        НЕ меняется — вместо этого рассылается уведомление о том,
+        что слот, на который забронирован стол, был отключен.
+
+        Чтение "уже забронированных" и последующая деактивация свободных
+        строк выполняются в рамках одной блокировки (FOR UPDATE), чтобы
+        исключить гонку с параллельным созданием бронирования.
+        """
+        booked_table_slots = await table_slot_crud.get_booked_by_filters(
+            session,
+            slot_id=slot_id,
+            from_date=datetime.now(timezone.utc).date(),
+            for_update=True,
+        )
+
+        await table_slot_crud.deactivate_by_filters(
+            session,
+            slot_id=slot_id,
+            from_date=datetime.now(timezone.utc).date(),
+            commit=commit,
+        )
+
+        if booked_table_slots:
+            schedule_notifications_on_slot_status_change(
+                booked_table_slots,
+                reason='Временной слот, на который вы забронировали стол, '
+                       'был отключен администрацией кафе',
+            )
+            logger.debug(
+                'Разослано %d уведомлений об отключении слота %s '
+                'по существующим бронированиям',
+                len(booked_table_slots),
+                slot_id,
+            )
+
+    async def deactivate_for_table(
+        self,
+        session: AsyncSession,
+        table_id: UUID,
+        commit: bool = True,
+    ) -> None:
+        """Деактивирует небронированные TableSlot при отключении стола.
+
+        По уже забронированным TableSlot (booking_id заполнен) статус
+        НЕ меняется — вместо этого рассылается уведомление о том,
+        что стол, на который сделана бронь, был отключен.
+
+        Чтение "уже забронированных" и последующая деактивация свободных
+        строк выполняются в рамках одной блокировки (FOR UPDATE), чтобы
+        исключить гонку с параллельным созданием бронирования.
+        """
+        booked_table_slots = await table_slot_crud.get_booked_by_filters(
+            session,
+            table_id=table_id,
+            from_date=datetime.now(timezone.utc).date(),
+            for_update=True,
+        )
+
+        await table_slot_crud.deactivate_by_filters(
+            session,
+            table_id=table_id,
+            from_date=datetime.now(timezone.utc).date(),
+            commit=commit,
+        )
+
+        if booked_table_slots:
+            schedule_notifications_on_slot_status_change(
+                booked_table_slots,
+                reason='Стол, который вы забронировали, '
+                       'был отключен администрацией кафе',
+            )
+            logger.debug(
+                'Разослано %d уведомлений об отключении стола %s '
+                'по существующим бронированиям',
+                len(booked_table_slots),
+                table_id,
+            )
+
+
 booking_service = BookingService()
+table_slot_service = TableSlotService()

@@ -123,25 +123,28 @@ async def check_booking_collision(
     db: AsyncSession,
     user_id: UUID,
     start_time: time,
+    end_time: time,
     booking_date: date,
 ) -> None:
-    """Проверяет наличие у пользователя других броней на то же время.
+    """Проверяет наличие у пользователя других броней на пересекающееся время.
 
     Args:
         db: Сессия базы данных.
         user_id: ID пользователя.
         start_time: Время начала слота.
+        end_time: Время окончания слота.
         booking_date: Дата брони.
 
     Raises:
         HTTPException: Если найдено пересечение по времени.
 
     """
-    collision = await booking_crud.get_bookings(
+    collision = await booking_crud.get_bookings_overlapping(
         db=db,
         user_id=user_id,
         booking_date=booking_date,
         start_time=start_time,
+        end_time=end_time,
     )
     if collision:
         logger.warning('Попытка брони на то же время в другом заведении.')
@@ -249,6 +252,9 @@ async def validate_slots_availability(
     db: AsyncSession,
     booking_date: date,
     tables_slots: list[BookingTableSlot],
+    cafe_id: UUID,
+    for_update: bool = False,
+    current_booking_id: UUID | None = None,
 ) -> list[TableSlot]:
     """Проверяет доступность списка столов на конкретную дату.
 
@@ -256,11 +262,20 @@ async def validate_slots_availability(
     1. Проверка даты (нельзя бронировать задним числом).
     2. Проверка существования каждой пары стол-слот.
     3. Проверка статуса и отсутствия существующих броней.
+    4. Проверка принадлежности стола указанному кафе.
 
     Args:
         db (AsyncSession): Асинхронная сессия базы данных.
         booking_date (date): Дата планируемого визита.
         tables_slots (list[BookingTableSlot]): Список пар стол-слот.
+        cafe_id (UUID): ID кафе, которому должны принадлежать столы.
+        for_update (bool): Если True — блокирует строки TableSlot
+            до конца транзакции (используется перед фактическим
+            созданием/переносом бронирования).
+        current_booking_id (UUID | None): ID бронирования, которое
+            обновляется. Если передан, столы/слоты, уже привязанные
+            к этому бронированию, считаются доступными (не будут
+            считаться "уже занятыми чужой бронью").
 
     Returns:
         list[TableSlot]: Список найденных и проверенных объектов TableSlot.
@@ -275,6 +290,9 @@ async def validate_slots_availability(
         db,
         pairs,
         booking_date,
+        cafe_id=cafe_id,
+        for_update=for_update,
+        current_booking_id=current_booking_id,
     )
 
     found_by_pair = {(ts.table_id, ts.slot_id): ts for ts in found_slots}
@@ -288,7 +306,10 @@ async def validate_slots_availability(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail='Слот для стола не найден.',
             )
-        if slot.booking_id is not None:
+        if (
+            slot.booking_id is not None
+            and slot.booking_id != current_booking_id
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Стол на выбранное время уже забронирован.',

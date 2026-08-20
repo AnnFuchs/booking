@@ -1,16 +1,22 @@
 from datetime import date, time
+from typing import Sequence
 from uuid import UUID
 
-from sqlalchemy import func, select, tuple_, update
+from sqlalchemy import func, or_, select, tuple_, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import contains_eager, joinedload, selectinload
 from sqlalchemy.sql.base import ExecutableOption
 
 from src.bookings.models import Booking, TableSlot
 from src.bookings.schemas import BookingCreate
 from src.core.constants import BookingStatus
+from src.core.logger import get_logger
 from src.crud.crud import CRUDBase
+from src.crud.utils import build_filter_conditions
 from src.db.models_for_alembic import Cafe, Slot, Table
+
+logger = get_logger(__name__)
 
 
 class BookingCRUD(CRUDBase[Booking]):
@@ -111,6 +117,42 @@ class BookingCRUD(CRUDBase[Booking]):
         )
         return (await db.execute(query)).scalar() or 0
 
+    async def get_bookings_overlapping(
+        self,
+        db: AsyncSession,
+        user_id: UUID,
+        booking_date: date,
+        start_time: time,
+        end_time: time,
+    ) -> list[Booking]:
+        """Возвращает активные брони пользователя, пересекающиеся по времени.
+
+        Args:
+            db (AsyncSession): Асинхронная сессия базы данных.
+            user_id (UUID): ID пользователя.
+            booking_date (date): Дата бронирования.
+            start_time (time): Время начала нового слота.
+            end_time (time): Время окончания нового слота.
+
+        Returns:
+            list[Booking]: Список пересекающихся по времени бронирований.
+
+        """
+        query = (
+            select(self.model)
+            .join(self.model.tables_slots)
+            .join(TableSlot.slot)
+            .where(
+                self.model.user_id == user_id,
+                self.model.booking_date == booking_date,
+                self.model.is_active,
+                Slot.start_time < end_time,
+                Slot.end_time > start_time,
+            )
+        )
+        result = await db.execute(query)
+        return list(result.unique().scalars().all())
+
     async def get_bookings(
         self,
         db: AsyncSession,
@@ -166,6 +208,9 @@ class BookingCRUD(CRUDBase[Booking]):
         db: AsyncSession,
         expected_pairs: list[tuple[UUID, UUID]],
         booking_date: date,
+        cafe_id: UUID,
+        for_update: bool = False,
+        current_booking_id: UUID | None = None,
     ) -> list[TableSlot]:
         """Получение всех объектов Tableslots для даты.
 
@@ -174,25 +219,47 @@ class BookingCRUD(CRUDBase[Booking]):
             expected_pairs (list[tuple[UUID, UUID]]): список кортежей
                 из пар стол-слот.
             booking_date (date): Дата планируемого бронирования.
+            cafe_id (UUID): ID кафе, к которому должны принадлежать
+                все переданные столы (защита от подмены чужого стола
+                при указании cafe_id из другого кафе).
+            for_update (bool): Если True — блокирует найденные строки
+                (SELECT ... FOR UPDATE) до конца транзакции, чтобы
+                избежать гонки при параллельном бронировании одного
+                и того же стола.
+            current_booking_id (UUID | None): Если указан, разрешает
+                находить TableSlot, уже привязанные к этому же
+                бронированию (нужно при обновлении брони, когда
+                пользователь передаёт тот же набор стол-слот).
 
         Returns:
             Cписок найденных объектов TableSlot.
 
         """
+        booking_free_condition = TableSlot.booking_id.is_(None)
+        if current_booking_id is not None:
+            booking_free_condition = or_(
+                booking_free_condition,
+                TableSlot.booking_id == current_booking_id,
+            )
+
         query = (
             select(TableSlot)
+            .join(TableSlot.table)
             .options(
-                joinedload(TableSlot.slot),
-                joinedload(TableSlot.table),
+                joinedload(TableSlot.slot, innerjoin=True),
+                contains_eager(TableSlot.table),
             )
             .where(
                 tuple_(TableSlot.table_id, TableSlot.slot_id)
                 .in_(expected_pairs),
                 TableSlot.booking_date == booking_date,
                 TableSlot.is_active,
-                TableSlot.booking_id.is_(None),
+                Table.cafe_id == cafe_id,
+                booking_free_condition,
             )
         )
+        if for_update:
+            query = query.with_for_update()
         result = await db.execute(query)
         return list(result.scalars().all())
 
@@ -291,4 +358,142 @@ class BookingCRUD(CRUDBase[Booking]):
         return booking
 
 
+class CRUDTableSlot(CRUDBase[TableSlot]):
+    """CRUD для модели TableSlot."""
+
+    async def bulk_create(
+        self,
+        session: AsyncSession,
+        table_slots: Sequence[TableSlot],
+    ) -> None:
+        """Массовое создание TableSlot.
+
+        Выполняет add_all + flush, не коммитит транзакцию,
+        чтобы вызывающий код мог управлять целостностью.
+        """
+        session.add_all(table_slots)
+        try:
+            await session.flush()
+        except IntegrityError:
+            logger.warning(
+                'Конфликт уникальности при массовом создании TableSlot '
+                '(возможна гонка при параллельном создании слота).',
+            )
+            raise
+
+    async def get_booked_by_filters(
+        self,
+        session: AsyncSession,
+        *,
+        table_id: UUID | None = None,
+        slot_id: UUID | None = None,
+        from_date: date | None = None,
+        for_update: bool = False,
+    ) -> list[TableSlot]:
+        """Возвращает активные TableSlot, которые уже забронированы.
+
+        Ищет записи TableSlot с is_active=True и заполненным booking_id,
+        удовлетворяющие переданным фильтрам. Необходимо указать хотя бы
+        один из параметров table_id или slot_id.
+
+        Args:
+            session (AsyncSession): Асинхронная сессия SQLAlchemy для
+                выполнения запроса.
+            table_id (UUID | None): Идентификатор стола, по которому
+                фильтруются TableSlot. Может быть не указан, если задан
+                slot_id.
+            slot_id (UUID | None): Идентификатор слота, по которому
+                фильтруются TableSlot. Может быть не указан, если задан
+                table_id.
+            from_date (date | None): Если указано, в выборку попадают
+                только TableSlot с датой бронирования (booking_date)
+                не раньше этой даты.
+            for_update (bool): Если True — блокирует найденные строки
+                (SELECT ... FOR UPDATE), чтобы исключить гонку между
+                чтением и последующей деактивацией свободных TableSlot.
+
+        Returns:
+            list[TableSlot]: Список найденных TableSlot вместе с
+                предзагруженными связанными объектами booking (и его
+                user, cafe), table и slot.
+
+        Raises:
+            ValueError: Если не указан ни table_id, ни slot_id.
+
+        """
+        if not table_id and not slot_id:
+            raise ValueError(
+                'Необходимо указать table_id или slot_id '
+                'для поиска забронированных TableSlot',
+            )
+
+        filters: dict = {'is_active': True, 'booking_id__is_null': False}
+        if table_id:
+            filters['table_id'] = table_id
+        if slot_id:
+            filters['slot_id'] = slot_id
+        if from_date:
+            filters['booking_date__gte'] = from_date
+
+        conditions = build_filter_conditions(TableSlot, filters)
+        query = (
+            select(TableSlot)
+            .options(
+                joinedload(TableSlot.booking).joinedload(Booking.user),
+                joinedload(TableSlot.booking).joinedload(Booking.cafe),
+                joinedload(TableSlot.table),
+                joinedload(TableSlot.slot),
+            )
+            .where(*conditions)
+        )
+        if for_update:
+            query = query.with_for_update(of=TableSlot)
+        result = await session.execute(query)
+        return list(result.unique().scalars().all())
+
+    async def deactivate_by_filters(
+        self,
+        session: AsyncSession,
+        *,
+        table_id: UUID | None = None,
+        slot_id: UUID | None = None,
+        from_date: date | None = None,
+        only_unbooked: bool = True,
+        commit: bool = True,
+    ) -> None:
+        """Деактивирует TableSlot по условиям (без затрагивания бронирований).
+
+        Используется при деактивации Slot/Table, а не удаляет записи,
+        чтобы сохранить историю уже существующих связей с бронированиями.
+
+        ВАЖНО: по умолчанию (only_unbooked=True) затрагивает только
+        НЕзабронированные TableSlot. Уже забронированные записи
+        сохраняют свой is_active=True и booking_id — по ним нужно
+        отдельно уведомить пользователей (см. get_booked_by_filters).
+        """
+        if not table_id and not slot_id:
+            raise ValueError(
+                'Необходимо указать table_id или slot_id '
+                'для деактивации TableSlot',
+            )
+
+        filters: dict = {'is_active': True}
+        if table_id:
+            filters['table_id'] = table_id
+        if slot_id:
+            filters['slot_id'] = slot_id
+        if from_date:
+            filters['booking_date__gte'] = from_date
+        if only_unbooked:
+            filters['booking_id__is_null'] = True
+
+        conditions = build_filter_conditions(TableSlot, filters)
+        stmt = update(TableSlot).values(is_active=False).where(*conditions)
+
+        await session.execute(stmt)
+        if commit:
+            await session.commit()
+
+
 booking_crud = BookingCRUD(Booking)
+table_slot_crud = CRUDTableSlot(TableSlot)
