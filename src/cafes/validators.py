@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.cafes.crud import cafe_crud
@@ -9,8 +10,10 @@ from src.cafes.errors import (
     ManagerNotBusyError,
     ManagerNotFoundError,
     ManagerRoleError,
+    ManagerWrongCafeError,
 )
 from src.core.constants import (
+    ACCESS_FORBIDDEN_DETAIL,
     MESSAGE_DUPLICATE_NAME_AND_ADDRESS,
     MESSAGE_MANAGERS_ID_IS_NULL,
     Role,
@@ -88,8 +91,13 @@ async def validate_managers_id(
     return existing_users_map
 
 
-async def check_manager_is_working(manager: User) -> User:
-    """Проверяет, привязан ли менеджер хотя бы к 1 кафе."""
+async def check_manager_is_working(manager: User) -> None:
+    """Проверяет, привязан ли менеджер хотя бы к 1 кафе.
+
+    Raises:
+        ManagerNotBusyError если менеджер не привязан к кафе.
+
+    """
     if manager.cafe_id is None:
         logger.warning(
             'Менеджер %s не привязан ни к одному кафе',
@@ -98,4 +106,88 @@ async def check_manager_is_working(manager: User) -> User:
         raise ManagerNotBusyError(
             f'Менеджер {manager.id} не привязан ни к одному кафе',
         )
-    return manager
+
+
+async def check_manager_is_working_in_cafe_with_id(
+    manager: User,
+    cafe_id: UUID,
+) -> None:
+    """Проверяет, привязан ли менеджер к конкретному кафе.
+
+    Raises:
+        ManagerWrongCafeError если менеджер привязан не к тому кафе.
+
+    """
+    if manager.cafe_id != cafe_id:
+        logger.warning(
+            'Менеджер %s не привязан к кафе c id %s',
+            manager.id,
+            cafe_id,
+        )
+        raise ManagerWrongCafeError(
+            f'Менеджер {manager.id} не привязан к кафе c id {cafe_id}',
+        )
+
+
+async def check_cafe_exists(
+    session: AsyncSession,
+    cafe_id: UUID,
+) -> None:
+    """Проверяет существование кафе по ID.
+
+    Args:
+        session: Сессия БД
+        cafe_id: ID кафе
+
+    Raises:
+        HTTPException 404: Если кафе с таким ID не существует
+
+    """
+    if not await cafe_crud.exists(session, cafe_id):
+        logger.warning('Кафе с id %s не найдено.', cafe_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Кафе не найдено',
+        )
+
+
+async def check_user_cafe_access(
+    session: AsyncSession,
+    user: User,
+    cafe_id: UUID,
+) -> None:
+    """Проверяет, имеет ли пользователь доступ к управлению кафе.
+
+    ВАЖНО: Эта функция НЕ проверяет роль пользователя.
+    Уже проверили пользователя через Depends(get_user_by_role(STAFF_ROLE)).
+
+    Правила доступа:
+        - ADMIN: имеет доступ к ЛЮБОМУ кафе
+        - MANAGER: имеет доступ ТОЛЬКО к своему кафе (user.cafe_id == cafe_id)
+
+    Args:
+        session: Сессия БД
+        user: Текущий пользователь (уже проверен на принадлежность к STAFF)
+        cafe_id: ID кафе, к которому запрашивается доступ
+
+    Raises:
+        HTTPException 404: Если кафе с таким ID не существует
+        HTTPException 403: Если у пользователя нет прав на это кафе
+
+    """
+    await check_cafe_exists(session=session, cafe_id=cafe_id)
+
+    if user.role == Role.ADMIN:
+        return
+    if user.role == Role.MANAGER:
+        if user.cafe_id != cafe_id:
+            logger.warning(
+                'Пользователь %s не имеет прав на работу с кафе %s',
+                user.id,
+                cafe_id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ACCESS_FORBIDDEN_DETAIL,
+            )
+        return

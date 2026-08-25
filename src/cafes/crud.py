@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql import exists
 
 from src.core.constants import Role
 from src.crud.crud import CRUDBase
@@ -41,6 +42,17 @@ class CRUDCafe(CRUDBase[Cafe]):
             ),
         )
         return result.scalars().first()
+
+    async def exists(
+        self,
+        session: AsyncSession,
+        cafe_id: UUID,
+    ) -> bool:
+        """Проверка существования кафе с заданным id."""
+        result = await session.execute(
+            select(exists().where(Cafe.id == cafe_id)),
+        )
+        return result.scalar()
 
 
 cafe_crud = CRUDCafe(Cafe)
