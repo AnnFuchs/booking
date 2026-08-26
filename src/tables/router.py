@@ -1,13 +1,15 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import get_user_by_role
+from src.cafes.errors import ManagerWrongCafeError
 from src.core.constants import ALL_ROLE, STAFF_ROLE
 from src.db.models_for_alembic import User
 from src.db.session import get_async_session
+from src.tables.errors import TableNotFoundError
 from src.tables.schemas import TableCreate, TableInfo, TableUpdate
 from src.tables.service import table_service
 
@@ -60,12 +62,18 @@ async def get_tables(
     Для менеджера — только своё кафе
     Для пользователей — только активные
     """
-    return await table_service.get_tables(
-        session=session,
-        cafe_id=cafe_id,
-        current_user=current_user,
-        is_active=show_active,
-    )
+    try:
+        return await table_service.get_tables(
+            session=session,
+            cafe_id=cafe_id,
+            current_user=current_user,
+            is_active=show_active,
+        )
+    except ManagerWrongCafeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
 
 
 @router.get(
@@ -84,12 +92,23 @@ async def get_table(
     Для администратора и менеджер — любые столы
     Для пользователей — только активные
     """
-    return await table_service.get_table(
-        session=session,
-        cafe_id=cafe_id,
-        table_id=table_id,
-        current_user=current_user,
-    )
+    try:
+        return await table_service.get_table(
+            session=session,
+            cafe_id=cafe_id,
+            table_id=table_id,
+            current_user=current_user,
+        )
+    except ManagerWrongCafeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+    except TableNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
 
 
 @router.patch(
@@ -108,10 +127,21 @@ async def update_table(
 
     Только для администраторов и менеджеров
     """
-    return await table_service.update_table(
-        cafe_id=cafe_id,
-        table_id=table_id,
-        data=data,
-        current_user=current_user,
-        session=session,
-    )
+    try:
+        return await table_service.update_table(
+            cafe_id=cafe_id,
+            table_id=table_id,
+            data=data,
+            current_user=current_user,
+            session=session,
+        )
+    except ManagerWrongCafeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(e),
+        )
+    except TableNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )

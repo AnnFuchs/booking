@@ -44,3 +44,9 @@ class ManagerNotBusyError(Exception):
     """Ошибка при отсутствии привязки менеджера к какому-либо кафе."""
 
     pass
+
+
+class ManagerWrongCafeError(Exception):
+    """Ошибка при несовпадении id кафе с id кафе менеджера."""
+
+    pass

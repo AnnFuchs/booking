@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.bookings.service import table_slot_service
 from src.cafes.crud import cafe_crud
+from src.cafes.validators import check_user_cafe_access
 from src.core.constants import (
     STAFF_ROLE,
 )
@@ -16,7 +17,6 @@ from src.slots.errors import SlotOverlapError
 from src.slots.models import Slot
 from src.slots.schemas import TimeSlotCreate, TimeSlotUpdate
 from src.slots.utils import validate_slot_time
-from src.slots.validators import check_user_cafe_access
 from src.users.models import User
 
 logger = get_logger(__name__)
