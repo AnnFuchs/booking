@@ -78,7 +78,6 @@ class UserService:
 
         user = User(**user_dict)
 
-        session.add(user)
         try:
             new_user = await self.repository.save(session, user)
             logger.debug('Создан новый пользователь с id %s', new_user.id)
