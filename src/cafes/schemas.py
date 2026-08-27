@@ -11,11 +11,11 @@ from pydantic import (
 )
 
 from src.core.constants import (
-    ADDRESS_MAX_LENGTH,
-    DESCRIPTION_MAX_LENGTH,
+    ADDRESS_MAX_LEN,
+    DESCRIPTION_MAX_LEN,
     E164_RU_NUMBER,
-    MIN_LENGTH,
-    NAME_MAX_LENGTH,
+    MIN_LEN,
+    NAME_MAX_LEN,
 )
 from src.users.schemas import UserShortInfo
 
@@ -24,17 +24,17 @@ class CafeBase(BaseModel):
     """Базовая схема кафе."""
 
     name: str = Field(
-        min_length=MIN_LENGTH,
-        max_length=NAME_MAX_LENGTH,
+        min_length=MIN_LEN,
+        max_length=NAME_MAX_LEN,
     )
     address: str = Field(
-        min_length=MIN_LENGTH,
-        max_length=ADDRESS_MAX_LENGTH,
+        min_length=MIN_LEN,
+        max_length=ADDRESS_MAX_LEN,
     )
     phone: E164_RU_NUMBER
     description: str | None = Field(
         None,
-        max_length=DESCRIPTION_MAX_LENGTH,
+        max_length=DESCRIPTION_MAX_LEN,
     )
     photo_id: uuid.UUID | None = None
 
@@ -50,16 +50,16 @@ class CafeUpdate(BaseModel):
 
     name: str | None = Field(
         default=None,
-        max_length=NAME_MAX_LENGTH,
+        max_length=NAME_MAX_LEN,
     )
     address: str | None = Field(
         default=None,
-        max_length=ADDRESS_MAX_LENGTH,
+        max_length=ADDRESS_MAX_LEN,
     )
     phone: E164_RU_NUMBER | None = None
     description: str | None = Field(
         default=None,
-        max_length=DESCRIPTION_MAX_LENGTH,
+        max_length=DESCRIPTION_MAX_LEN,
     )
     photo_id: uuid.UUID | None = None
     managers_id: list[uuid.UUID] | None = None

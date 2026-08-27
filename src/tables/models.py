@@ -4,7 +4,7 @@ from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.core.constants import DESCRIPTION_MAX_LENGTH
+from src.core.constants import DESCRIPTION_MAX_LEN
 from src.db.base import Base
 from src.db.models_for_alembic import Cafe
 
@@ -15,7 +15,7 @@ class Table(Base):
     __tablename__ = 'tables'
 
     description: Mapped[str | None] = mapped_column(
-        String(DESCRIPTION_MAX_LENGTH),
+        String(DESCRIPTION_MAX_LEN),
         nullable=True,
     )
     seat_number: Mapped[int] = mapped_column(

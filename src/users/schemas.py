@@ -13,7 +13,7 @@ from pydantic import (
     model_validator,
 )
 
-from src.core.constants import E164_RU_NUMBER, MIN_LENGTH, Role
+from src.core.constants import E164_RU_NUMBER, MIN_LEN, Role
 
 
 class PhoneValidatorMixin(BaseModel):
@@ -39,7 +39,7 @@ class UserShortInfo(PhoneValidatorMixin):
     """Короткая pydantic-схема для просмотра пользователя."""
 
     id: UUID
-    username: str = Field(..., min_length=MIN_LENGTH)
+    username: str = Field(..., min_length=MIN_LEN)
     email: EmailStr | None = None
     tg_id: str | None = None
 
@@ -58,7 +58,7 @@ class UserInfo(UserShortInfo):
 class UserCreate(PhoneValidatorMixin):
     """Pydantic-схема для создания пользователя."""
 
-    username: str = Field(..., min_length=MIN_LENGTH)
+    username: str = Field(..., min_length=MIN_LEN)
     email: EmailStr | None = None
     tg_id: str | None = None
     password: SecretStr
@@ -110,7 +110,7 @@ class AdminUserCreate(UserCreate):
 class UserUpdate(PhoneValidatorMixin):
     """Pydantic-схема для обновления пользователя."""
 
-    username: str | None = Field(default=None, min_length=MIN_LENGTH)
+    username: str | None = Field(default=None, min_length=MIN_LEN)
     email: EmailStr | None = None
     tg_id: str | None = None
     password: SecretStr | None = None

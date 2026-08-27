@@ -5,7 +5,7 @@ from sqlalchemy import CheckConstraint, Enum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.core.constants import Role
+from src.core.constants import Role, USERNAME_MAX_LEN, EMAIL_MAX_LEN, PHONE_MAX_LEN
 from src.db.base import Base
 
 if TYPE_CHECKING:
@@ -30,9 +30,15 @@ class User(Base):
     """
 
     __tablename__ = 'users'
+    __table_args__ = (
+        CheckConstraint(
+            '(email IS NOT NULL) OR (phone IS NOT NULL)',
+            name='email_or_phone_not_null',
+        ),
+    )
 
     username: Mapped[str] = mapped_column(
-        String,
+        String(length=),
         nullable=False,
         unique=True,
         index=True,
@@ -69,10 +75,4 @@ class User(Base):
         'Cafe',
         back_populates='managers',
         lazy='selectin',
-    )
-    __table_args__ = (
-        CheckConstraint(
-            '(email IS NOT NULL) OR (phone IS NOT NULL)',
-            name='email_or_phone_not_null',
-        ),
     )

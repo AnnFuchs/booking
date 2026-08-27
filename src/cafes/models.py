@@ -8,10 +8,10 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from src.core.constants import (
-    ADDRESS_MAX_LENGTH,
-    DESCRIPTION_MAX_LENGTH,
-    NAME_MAX_LENGTH,
-    PHONE_MAX_LENGTH,
+    ADDRESS_MAX_LEN,
+    DESCRIPTION_MAX_LEN,
+    NAME_MAX_LEN,
+    PHONE_MAX_LEN,
 )
 from src.db.base import Base
 from src.db.utils import validate_and_format_phone
@@ -30,19 +30,19 @@ class Cafe(Base):
     )
 
     name: Mapped[str] = mapped_column(
-        String(NAME_MAX_LENGTH),
+        String(NAME_MAX_LEN),
         nullable=False,
     )
     address: Mapped[str] = mapped_column(
-        String(ADDRESS_MAX_LENGTH),
+        String(ADDRESS_MAX_LEN),
         nullable=False,
     )
     phone: Mapped[str] = mapped_column(
-        String(PHONE_MAX_LENGTH),
+        String(PHONE_MAX_LEN),
         nullable=False,
     )
     description: Mapped[str] = mapped_column(
-        String(DESCRIPTION_MAX_LENGTH),
+        String(DESCRIPTION_MAX_LEN),
         nullable=True,
     )
     photo_id: Mapped[uuid.UUID] = mapped_column(
