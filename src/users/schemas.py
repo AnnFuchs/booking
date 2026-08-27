@@ -1,6 +1,5 @@
-import re
 from datetime import datetime
-from typing import Self
+from typing import Any, Self
 from uuid import UUID
 
 from pydantic import (
@@ -9,37 +8,24 @@ from pydantic import (
     EmailStr,
     Field,
     SecretStr,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
 
 from src.core.constants import E164_RU_NUMBER, MIN_LEN, Role
+from src.users.validators import (
+    validate_password_value,
+    validate_username_value,
+)
 
 
-class PhoneValidatorMixin(BaseModel):
-    """Mixin для валидации номера телефона."""
-
-    phone: E164_RU_NUMBER | None = None
-
-    @field_validator('phone')
-    @classmethod
-    def validate_phone(cls, v: str) -> str:
-        """Валидация номера телефона."""
-        if v is None:
-            return v
-        v = str(v)
-        if not v.startswith('+7'):
-            raise ValueError('Номер телефона должен начинаться с +7')
-        if len(v) != 12:
-            raise ValueError('Номер телефона должен содержать 12 символов')
-        return v
-
-
-class UserShortInfo(PhoneValidatorMixin):
+class UserShortInfo(BaseModel):
     """Короткая pydantic-схема для просмотра пользователя."""
 
     id: UUID
     username: str = Field(..., min_length=MIN_LEN)
+    phone: E164_RU_NUMBER | None = None
     email: EmailStr | None = None
     tg_id: str | None = None
 
@@ -55,38 +41,26 @@ class UserInfo(UserShortInfo):
     updated_at: datetime
 
 
-class UserCreate(PhoneValidatorMixin):
+class UserCreate(BaseModel):
     """Pydantic-схема для создания пользователя."""
 
     username: str = Field(..., min_length=MIN_LEN)
     email: EmailStr | None = None
+    phone: E164_RU_NUMBER | None = None
     tg_id: str | None = None
     password: SecretStr
 
     @field_validator('username')
     @classmethod
-    def validate_username(cls, v: str) -> str:
+    def validate_username(cls, value: str) -> str:
         """Валидация имени пользователя."""
-        if not v or not v.strip():
-            raise ValueError(
-                'Имя пользователя не может быть пустым '
-                'или состоять только из пробелов.',
-            )
-        return v.strip()
+        return validate_username_value(value=value)
 
     @field_validator('password', mode='after')
     @classmethod
     def validate_password(cls, value: SecretStr) -> SecretStr:
-        """Check password is secure."""
-        pwd = value.get_secret_value()
-        pattern = r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$'
-        if not re.fullmatch(pattern, pwd):
-            raise ValueError(
-                'Пароль должен содержать не менее 8 знаков, ',
-                'включая 1 заглавную латинскую букву, ',
-                '1 прописную латинскую букву и 1 цифру.',
-            )
-        return value
+        """Валидация пароля."""
+        return validate_password_value(value=value)
 
     @model_validator(mode='after')
     def validate_contacts(self) -> Self:
@@ -107,41 +81,46 @@ class AdminUserCreate(UserCreate):
     role: Role = Role.ADMIN
 
 
-class UserUpdate(PhoneValidatorMixin):
+class UserUpdate(BaseModel):
     """Pydantic-схема для обновления пользователя."""
 
     username: str | None = Field(default=None, min_length=MIN_LEN)
-    email: EmailStr | None = None
-    tg_id: str | None = None
     password: SecretStr | None = None
+    email: EmailStr | None = None
+    phone: E164_RU_NUMBER | None = None
+    tg_id: str | None = None
 
     model_config = ConfigDict(from_attributes=True, extra='forbid')
 
     @field_validator('username')
     @classmethod
-    def validate_username(cls, v: str | None) -> str | None:
+    def validate_username_if_present(cls, v: str | None) -> str | None:
         """Валидация имени пользователя."""
-        if v is not None and not v.strip():
-            raise ValueError(
-                'Имя пользователя не может быть пустым '
-                'или состоять только из пробелов.',
-            )
-        return v.strip() if v else v
+        if v is not None:
+            return validate_username_value(v)
+        return v
 
     @field_validator('password', mode='after')
     @classmethod
-    def validate_password(cls, value: SecretStr | None) -> SecretStr:
-        """Check password is secure."""
+    def validate_password_if_present(
+        cls,
+        value: SecretStr | None,
+    ) -> SecretStr | None:
+        """Валидация пароля."""
+        if value is not None:
+            return validate_password_value(value)
+        return value
+
+    @field_validator(
+        'username',
+        'password',
+        mode='before',
+    )
+    @classmethod
+    def prevent_none(cls, value: Any, info: ValidationInfo) -> Any:
+        """Запрещает передачу явного None (null) для обязательных полей."""
         if value is None:
-            raise ValueError('Пароль не может быть null.')
-        pwd = value.get_secret_value()
-        pattern = r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$'
-        if not re.fullmatch(pattern, pwd):
-            raise ValueError(
-                'Пароль должен содержать не менее 8 знаков, ',
-                'включая 1 заглавную латинскую букву, ',
-                '1 прописную латинскую букву и 1 цифру.',
-            )
+            raise ValueError(f'Поле {info.field_name} не может быть null')
         return value
 
 
@@ -153,3 +132,16 @@ class UserUpdateAdmin(UserUpdate):
 
     role: Role | None = None
     is_active: bool | None = None
+
+    @field_validator(
+        'username',
+        'password',
+        'is_active',
+        mode='before',
+    )
+    @classmethod
+    def prevent_none(cls, value: Any, info: ValidationInfo) -> Any:
+        """Запрещает передачу явного None (null) для обязательных полей."""
+        if value is None:
+            raise ValueError(f'Поле {info.field_name} не может быть null')
+        return value

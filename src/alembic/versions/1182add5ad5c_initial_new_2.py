@@ -90,29 +90,29 @@ def upgrade() -> None:
         )
 
     if 'users' not in existing_tables:
-        op.create_table(
-            'users',
-            sa.Column('username', sa.String(), nullable=False),
-            sa.Column('email', sa.String(), nullable=True),
-            sa.Column('phone', sa.String(), nullable=True),
-            sa.Column('tg_id', sa.String(), nullable=True),
-            sa.Column('hashed_password', sa.String(), nullable=False),
-            sa.Column('role', sa.Enum('USER', 'MANAGER', 'ADMIN', name='role_enum'), nullable=False),
-            sa.Column('cafe_id', sa.UUID(), nullable=True),
-            sa.Column('id', sa.UUID(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-            sa.Column('is_active', sa.Boolean(), nullable=False),
-            sa.CheckConstraint('(email IS NOT NULL) OR (phone IS NOT NULL)', name='email_or_phone_not_null'),
-            sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id'], ondelete='SET NULL'),
-            sa.PrimaryKeyConstraint('id'),
-            sa.UniqueConstraint('tg_id')
-        )
-        with op.batch_alter_table('users', schema=None) as batch_op:
-            batch_op.create_index(batch_op.f('ix_users_cafe_id'), ['cafe_id'], unique=False)
-            batch_op.create_index(batch_op.f('ix_users_email'), ['email'], unique=True)
-            batch_op.create_index(batch_op.f('ix_users_phone'), ['phone'], unique=True)
-            batch_op.create_index(batch_op.f('ix_users_username'), ['username'], unique=True)
+            op.create_table(
+                'users',
+                sa.Column('username', sa.String(length=32), nullable=False),
+                sa.Column('email', sa.String(length=256), nullable=True),
+                sa.Column('phone', sa.String(length=20), nullable=True),
+                sa.Column('tg_id', sa.String(length=32), nullable=True),
+                sa.Column('hashed_password', sa.String(length=72), nullable=False),
+                sa.Column('role', sa.Enum('USER', 'MANAGER', 'ADMIN', name='role_enum'), nullable=False),
+                sa.Column('cafe_id', sa.UUID(), nullable=True),
+                sa.Column('id', sa.UUID(), nullable=False),
+                sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+                sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+                sa.Column('is_active', sa.Boolean(), nullable=False),
+                sa.CheckConstraint('(email IS NOT NULL) OR (phone IS NOT NULL)', name='email_or_phone_not_null'),
+                sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id'], ondelete='SET NULL'),
+                sa.PrimaryKeyConstraint('id'),
+                sa.UniqueConstraint('tg_id')
+            )
+            with op.batch_alter_table('users', schema=None) as batch_op:
+                batch_op.create_index(batch_op.f('ix_users_cafe_id'), ['cafe_id'], unique=False)
+                batch_op.create_index(batch_op.f('ix_users_email'), ['email'], unique=True)
+                batch_op.create_index(batch_op.f('ix_users_phone'), ['phone'], unique=True)
+                batch_op.create_index(batch_op.f('ix_users_username'), ['username'], unique=True)
 
     if 'bookings' not in existing_tables:
         op.create_table(

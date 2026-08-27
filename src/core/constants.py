@@ -18,10 +18,22 @@ class Role(StrEnum):
 
 
 JWT_LIFE: int = 3600
+"""Время жизни JWT токена в секундах"""
+
 TOKEN_TYPE: str = 'Bearer'
+"""Тип токена"""
 
 USERNAME_MAX_LEN: int = 32
+"""Максимальная длина имени пользователя"""
+
 EMAIL_MAX_LEN: int = 256
+"""Максимальная длина email пользователя"""
+
+TG_ID_MAX_LEN: int = 32
+"""Максимальная длина tg id пользователя"""
+
+PW_MAX_LEN: int = 72
+"""Максимальная длина пароля пользователя"""
 
 # Константы модуля media
 BASE_DIR: Path = Path(__file__).resolve().parents[2]

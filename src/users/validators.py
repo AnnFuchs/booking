@@ -1,5 +1,7 @@
+import re
 from uuid import UUID
 
+from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.logger import get_logger
@@ -9,6 +11,29 @@ from src.users.errors import DuplicateInfoError
 from src.users.models import User
 
 logger = get_logger(__name__)
+
+
+def validate_username_value(value: str) -> str:
+    """Валидация имени пользователя."""
+    if not value or not value.strip():
+        raise ValueError(
+            'Имя пользователя не может быть пустым '
+            'или состоять только из пробелов.',
+        )
+    return value.strip()
+
+
+def validate_password_value(value: SecretStr) -> SecretStr:
+    """Валидация безопасности пароля."""
+    pwd = value.get_secret_value()
+    pattern = r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,72}$'
+    if not re.fullmatch(pattern, pwd):
+        raise ValueError(
+            'Пароль должен содержать не менее 8, но не более 72 знаков, '
+            'включая 1 заглавную латинскую букву, '
+            '1 прописную латинскую букву и 1 цифру.',
+        )
+    return value
 
 
 async def check_user_exists(user_id: UUID, session: AsyncSession) -> User:
