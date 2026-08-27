@@ -83,7 +83,7 @@ class User(Base):
     cafe: Mapped['Cafe | None'] = relationship(
         'Cafe',
         back_populates='managers',
-        lazy='selectin',
+        lazy='noload',
     )
 
     @validates('phone')

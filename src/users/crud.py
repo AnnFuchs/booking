@@ -46,12 +46,5 @@ class UserCRUD(CRUDBase[User]):
 
         return (await session.execute(query)).scalars().first()
 
-    async def save(self, session: AsyncSession, user: User) -> User:
-        """Сохранение существующего или нового экземпляра пользователя."""
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-        return user
-
 
 user_crud = UserCRUD()
