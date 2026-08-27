@@ -1,10 +1,10 @@
-class DuplicateInfoError(ValueError):
+class DuplicateInfoError(Exception):
     """Ошибка дублирования данных при создании и обновлении модели."""
 
     pass
 
 
-class ContactInfoMissingError(ValueError):
+class ContactInfoMissingError(Exception):
     """Ошибка отсутствия контактных данных при обновлении модели."""
 
     pass
@@ -22,7 +22,7 @@ class SelfDeactivationAttemptError(Exception):
     pass
 
 
-class UserDataConflictError(ValueError):
+class UserDataConflictError(Exception):
     """Ошибка при попытке записи данных в базу при обновлении."""
 
     pass

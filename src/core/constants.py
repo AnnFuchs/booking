@@ -18,7 +18,22 @@ class Role(StrEnum):
 
 
 JWT_LIFE: int = 3600
+"""Время жизни JWT токена в секундах"""
+
 TOKEN_TYPE: str = 'Bearer'
+"""Тип токена"""
+
+USERNAME_MAX_LEN: int = 32
+"""Максимальная длина имени пользователя"""
+
+EMAIL_MAX_LEN: int = 256
+"""Максимальная длина email пользователя"""
+
+TG_ID_MAX_LEN: int = 32
+"""Максимальная длина tg id пользователя"""
+
+PW_MAX_LEN: int = 72
+"""Максимальная длина пароля пользователя"""
 
 # Константы модуля media
 BASE_DIR: Path = Path(__file__).resolve().parents[2]
@@ -45,13 +60,13 @@ JPEG_QUALITY_MIN: int = 50
 JPEG_QUALITY_STEP: int = 5
 """Шаг уменьшения качества JPG при попытке уложиться в лимит размера."""
 
-FILE_NAME_MAX_LENGTH: int = 255
+FILE_NAME_MAX_LEN: int = 255
 """Максимальное количество символов в названии файла."""
 
-MIME_TYPE_MAX_LENGTH: int = 50
+MIME_TYPE_MAX_LEN: int = 50
 """Максимальное количество символов значения типа файла."""
 
-FILE_PATH_MAX_LENGTH: int = 500
+FILE_PATH_MAX_LEN: int = 500
 """Максимальное количество символов в полном пути к файлу."""
 
 CHUNK_SIZE: int = 1024 * 1024
@@ -106,19 +121,19 @@ NOT_ADMIN_ROLE: tuple[Role, Role] = (Role.MANAGER, Role.USER)
 ALL_ROLE: tuple[Role, Role, Role] = (Role.ADMIN, Role.MANAGER, Role.USER)
 ADMIN_ONLY_UPDATE_FIELDS: tuple[str, str] = ('role', 'is_active')
 
-MIN_LENGTH: int = 1
+MIN_LEN: int = 1
 """Минимальная длина всех обязательных полей."""
 
-NAME_MAX_LENGTH: int = 100
+NAME_MAX_LEN: int = 100
 """Максимальная длина для поля name."""
 
-ADDRESS_MAX_LENGTH: int = 256
+ADDRESS_MAX_LEN: int = 256
 """Максимальная длина для поля address."""
 
-PHONE_MAX_LENGTH: int = 20
+PHONE_MAX_LEN: int = 20
 """Максимальная длина для поля phone."""
 
-DESCRIPTION_MAX_LENGTH: int = 500
+DESCRIPTION_MAX_LEN: int = 500
 """Максимальная длина для поля description."""
 
 MESSAGE_DUPLICATE_NAME_AND_ADDRESS: str = (

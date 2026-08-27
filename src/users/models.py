@@ -1,12 +1,21 @@
 import uuid
 from typing import TYPE_CHECKING
 
+from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import CheckConstraint, Enum, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
-from src.core.constants import Role
+from src.core.constants import (
+    EMAIL_MAX_LEN,
+    PHONE_MAX_LEN,
+    PW_MAX_LEN,
+    TG_ID_MAX_LEN,
+    USERNAME_MAX_LEN,
+    Role,
+)
 from src.db.base import Base
+from src.db.utils import validate_and_format_phone
 
 if TYPE_CHECKING:
     from src.db.models_for_alembic import Cafe
@@ -30,29 +39,35 @@ class User(Base):
     """
 
     __tablename__ = 'users'
+    __table_args__ = (
+        CheckConstraint(
+            '(email IS NOT NULL) OR (phone IS NOT NULL)',
+            name='email_or_phone_not_null',
+        ),
+    )
 
     username: Mapped[str] = mapped_column(
-        String,
+        String(length=USERNAME_MAX_LEN),
         nullable=False,
         unique=True,
         index=True,
     )
     email: Mapped[str | None] = mapped_column(
-        String,
+        String(length=EMAIL_MAX_LEN),
         unique=True,
         index=True,
     )
     phone: Mapped[str | None] = mapped_column(
-        String,
+        String(length=PHONE_MAX_LEN),
         unique=True,
         index=True,
     )
     tg_id: Mapped[str | None] = mapped_column(
-        String,
+        String(length=TG_ID_MAX_LEN),
         unique=True,
     )
     hashed_password: Mapped[str] = mapped_column(
-        String,
+        String(length=PW_MAX_LEN),
         nullable=False,
     )
     role: Mapped[Role] = mapped_column(
@@ -65,14 +80,29 @@ class User(Base):
         ForeignKey('cafes.id', ondelete='SET NULL'),
         index=True,
     )
-    cafe: Mapped['Cafe'] = relationship(
+    cafe: Mapped['Cafe | None'] = relationship(
         'Cafe',
         back_populates='managers',
-        lazy='selectin',
+        lazy='noload',
     )
-    __table_args__ = (
-        CheckConstraint(
-            '(email IS NOT NULL) OR (phone IS NOT NULL)',
-            name='email_or_phone_not_null',
-        ),
-    )
+
+    @validates('phone')
+    def validate_phone(self, key: str, phone: str | None) -> str | None:
+        """Валидация номера телефона (обёртка над утилитой)."""
+        if phone is None:
+            return None
+        return validate_and_format_phone(phone)
+
+    @validates('email')
+    def validate_email(self, key: str, email: str | None) -> str | None:
+        """Валидация email."""
+        if email is None:
+            return None
+        try:
+            valid_email = validate_email(email)
+            return valid_email.normalized
+        except EmailNotValidError:
+            raise ValueError(
+                'Переданное в поле email значение не является валидным '
+                'адресом электронной почты.',
+            )

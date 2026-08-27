@@ -7,7 +7,7 @@ from src.auth.password import get_password_hash
 from src.core.constants import ADMIN_ONLY_UPDATE_FIELDS, Role
 from src.core.logger import get_logger
 from src.db.utils import get_or_404
-from src.users.crud import UserCRUD, user_crud
+from src.users.crud import user_crud
 from src.users.errors import (
     ContactInfoMissingError,
     DuplicateInfoError,
@@ -25,15 +25,11 @@ logger = get_logger(__name__)
 class UserService:
     """Реализация CRUD для User."""
 
-    def __init__(self, repository: UserCRUD) -> None:
-        """Инициализация объекта."""
-        self.repository = repository
-
     async def get_user(self, session: AsyncSession, user_id: UUID) -> User:
         """Получение пользователя."""
         user = await get_or_404(
             session,
-            self.repository,
+            user_crud,
             user_id,
             detail='Пользователь не найден',
             filters={'is_active': True},
@@ -44,7 +40,7 @@ class UserService:
 
     async def get_multi_users(self, session: AsyncSession) -> list[User]:
         """Получение всех пользователей."""
-        users = await self.repository.get_multi(session)
+        users = await user_crud.get_multi(session)
         logger.debug('Получены пользователи в количестве %d.', len(users))
         return users
 
@@ -54,7 +50,7 @@ class UserService:
         login: str,
     ) -> User | None:
         """Получение пользователя по логину."""
-        user = await self.repository.get_by_login(session, login)
+        user = await user_crud.get_by_login(session, login)
         if user is None:
             logger.debug('Пользователь с логином %s не найден', login)
         else:
@@ -70,17 +66,16 @@ class UserService:
             session=session,
             tg_id=data.tg_id,
         )
-        user_dict = data.model_dump()
-        user_dict['hashed_password'] = get_password_hash(
-            data.password.get_secret_value(),
-        )
-        user_dict.pop('password')
 
-        user = User(**user_dict)
+        hashed_password = get_password_hash(data.password.get_secret_value())
 
-        session.add(user)
         try:
-            new_user = await self.repository.save(session, user)
+            new_user = await user_crud.create(
+                session,
+                obj_in=data,
+                exclude_fields={'password'},
+                hashed_password=hashed_password,
+            )
             logger.debug('Создан новый пользователь с id %s', new_user.id)
             return new_user
         except IntegrityError:
@@ -117,11 +112,14 @@ class UserService:
                 'email или телефон.',
             )
             raise ContactInfoMissingError()
+
+        extra_kwargs = {}
         if 'password' in update_dict:
             secret = update_dict.pop('password')
-            update_dict['hashed_password'] = get_password_hash(
+            extra_kwargs['hashed_password'] = get_password_hash(
                 secret.get_secret_value(),
             )
+
         if not request_author or request_author.role != Role.ADMIN:
             forbidden = set(update_dict.keys()) & set(ADMIN_ONLY_UPDATE_FIELDS)
             if forbidden:
@@ -133,6 +131,7 @@ class UserService:
                     request_author.id,
                 )
                 raise InsufficientPrivilegesError()
+
         if (
             request_author
             and db_user.id == request_author.id
@@ -144,17 +143,22 @@ class UserService:
             )
             raise SelfDeactivationAttemptError()
 
-        for field, value in update_dict.items():
-            setattr(db_user, field, value)
-
         try:
-            update_user = await self.repository.save(session, db_user)
+            for field, value in update_dict.items():
+                setattr(db_user, field, value)
+
+            for field, value in extra_kwargs.items():
+                setattr(db_user, field, value)
+
+            await session.commit()
+            await session.refresh(db_user)
+
             logger.debug(
                 'Пользователем %s обновлены данные пользователя %s.',
                 request_author.id,
-                update_user.id,
+                db_user.id,
             )
-            return update_user
+            return db_user
         except IntegrityError:
             await session.rollback()
             logger.warning(
@@ -164,4 +168,4 @@ class UserService:
             raise UserDataConflictError()
 
 
-user_service = UserService(repository=user_crud)
+user_service = UserService()

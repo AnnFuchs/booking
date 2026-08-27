@@ -4,7 +4,7 @@ from pydantic import EmailStr, Field, SecretStr, field_validator
 from pydantic_extra_types.phone_numbers import PhoneNumber
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from src.core.constants import BASE_DIR, MIN_LENGTH
+from src.core.constants import BASE_DIR, MIN_LEN
 
 
 class Settings(BaseSettings):
@@ -12,9 +12,9 @@ class Settings(BaseSettings):
 
     app_title: str = Field(
         default='Система бронирования мест в кафе',
-        min_length=MIN_LENGTH,
+        min_length=MIN_LEN,
     )
-    app_description: str = Field(default='.', min_length=MIN_LENGTH)
+    app_description: str = Field(default='.', min_length=MIN_LEN)
     app_servers: list[dict[str, str]] = [
         {
             'url': 'http://localhost:8000',
@@ -23,37 +23,37 @@ class Settings(BaseSettings):
     ]
     cors_origin: str = Field(
         default='http://localhost:8000',
-        min_length=MIN_LENGTH,
+        min_length=MIN_LEN,
     )
 
-    postgres_user: str = Field(min_length=MIN_LENGTH)
-    postgres_password: SecretStr = Field(min_length=MIN_LENGTH)
-    postgres_db: str = Field(min_length=MIN_LENGTH)
-    postgres_server: str = Field(min_length=MIN_LENGTH)
+    postgres_user: str = Field(min_length=MIN_LEN)
+    postgres_password: SecretStr = Field(min_length=MIN_LEN)
+    postgres_db: str = Field(min_length=MIN_LEN)
+    postgres_server: str = Field(min_length=MIN_LEN)
     postgres_port: int
-    redis_host: str = Field(default='redis', min_length=MIN_LENGTH)
+    redis_host: str = Field(default='redis', min_length=MIN_LEN)
     redis_port: int = 6379
     redis_db: int = 0
     celery_broker_url: str | None = None
     celery_result_backend: str | None = None
 
-    secret_key: SecretStr = Field(min_length=MIN_LENGTH)
-    algorithm: str = Field(min_length=MIN_LENGTH)
+    secret_key: SecretStr = Field(min_length=MIN_LEN)
+    algorithm: str = Field(min_length=MIN_LEN)
 
     first_superuser_login: EmailStr | PhoneNumber = Field(
-        min_length=MIN_LENGTH,
+        min_length=MIN_LEN,
         description='Email или номер телефона суперпользователя',
     )
-    first_superuser_password: SecretStr = Field(min_length=MIN_LENGTH)
+    first_superuser_password: SecretStr = Field(min_length=MIN_LEN)
 
-    mail_username: str = Field(min_length=MIN_LENGTH)
-    mail_password: SecretStr = Field(min_length=MIN_LENGTH)
-    mail_from: str = Field(min_length=MIN_LENGTH)
-    mail_server: str = Field(min_length=MIN_LENGTH)
+    mail_username: str = Field(min_length=MIN_LEN)
+    mail_password: SecretStr = Field(min_length=MIN_LEN)
+    mail_from: str = Field(min_length=MIN_LEN)
+    mail_server: str = Field(min_length=MIN_LEN)
     mail_port: int = 2525
     mail_starttls: bool = False
     mail_ssl_tls: bool = False
-    mail_from_name: str = Field(default='cafe booking', min_length=MIN_LENGTH)
+    mail_from_name: str = Field(default='cafe booking', min_length=MIN_LEN)
 
     _env_file = BASE_DIR / 'infra' / '.env'
 
