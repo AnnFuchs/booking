@@ -2,7 +2,7 @@
 
 ## Описание проекта:
 
-Проект представляет собой **API для системы бронирования мест в кафе**. Позволяет управлять кафе, столами, временными слотами, бронированиями, пользователями, блюдами и акциями. Реализована ролевая модель (администратор, менеджер, пользователь) с разграничением прав доступа к эндпоинтам.
+Проект представляет собой **API для системы бронирования мест в кафе**. Позволяет управлять кафе, столами, временными слотами и бронированиями. Реализована ролевая модель (администратор, менеджер, пользователь) с разграничением прав доступа к эндпоинтам.
 
 **Репозиторий:** https://github.com/Yandex-Practicum-Students/64_65_booking_seats_team_3
 
@@ -37,10 +37,11 @@
 - Просмотр истории бронирований (пользователь видит только свои)
 - Статусы бронирований: BOOKING, CANCELED, ACTIVE, COMPLETED
 
-### Асинхронные задачи (Celery)
-- **Обработка уведомлений** (email-оповещения о статусе бронирования)
-- **Периодические задачи** (например, очистка неактивных бронирований)
+### Уведомления
+- Email-оповещения о статусе бронирования через SMTP
+- Асинхронная отправка уведомлений с помощью **Celery**
 - Мониторинг задач через **Flower** (доступен на порту 5555)
+- Настройка SMTP-сервера через переменные окружения
 
 ### Медиа-файлы
 - Загрузка и хранение изображений (jpg, png, до 5 МБ)
@@ -58,6 +59,7 @@
 | Pydantic v2 | Валидация данных и схемы |
 | Alembic | Миграции базы данных |
 | PostgreSQL 17 | Основная база данных |
+| AsyncPG | Асинхронный драйвер PostgreSQL |
 | Redis 8 | Брокер сообщений для Celery |
 | Celery 5.6 | Асинхронная обработка задач |
 | Flower 2.0 | Мониторинг Celery задач |
@@ -65,6 +67,8 @@
 | Docker / Docker Compose | Контейнеризация |
 | python-jose | JWT токены |
 | python-multipart | Загрузка файлов |
+| Ruff | Линтер и форматтер кода |
+| Pre-commit | Автоматическая проверка кода |
 
 ## Роли и права доступа:
 
@@ -76,131 +80,23 @@
 
 ## API документация
 
-Интерактивная документация API доступна в формате Swagger UI по следующим адресам:
+Интерактивная документация API доступна в формате Swagger UI:
 
-- **Production environment:** [https://team3.ddns.net/api/v1/docs](https://team3.ddns.net/api/v1/docs)
 - **Local development:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **Production:** `https://your-domain.com/api/v1/docs`
 
 Альтернативный формат документации (ReDoc):
 
 - **Local:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+- **Production:** `https://your-domain.com/api/v1/redoc`
 
-> **Примечание:** Production-экземпляр API развернут с поддержкой HTTPS. Swagger UI позволяет выполнять интерактивные запросы к API, включая авторизацию с использованием JWT-токенов. Для тестирования защищённых эндпоинтов необходимо предварительно получить токен через эндпоинт `/api/v1/auth/login` и авторизоваться в интерфейсе Swagger, нажав кнопку **Authorize**.
+> **Примечание:** Swagger UI позволяет выполнять интерактивные запросы к API, включая авторизацию с использованием JWT-токенов. Для тестирования защищённых эндпоинтов необходимо предварительно получить токен через эндпоинт `/api/v1/auth/login` и авторизоваться в интерфейсе Swagger, нажав кнопку **Authorize**.
 
 ## Установка и запуск:
 
-### Способ 1: Локальный запуск (для разработки)
+### Способ 1: Локальный запуск через Docker Compose (рекомендуемый)
 
-#### 1. Клонировать репозиторий
-
-```bash
-git clone https://github.com/Yandex-Practicum-Students/64_65_booking_seats_team_3.git
-cd 64_65_booking_seats_team_3
-```
-
-#### 2. Создать и активировать виртуальное окружение
-
-**Windows:**
-```bash
-py -3.12 -m venv venv
-venv\Scripts\activate
-```
-
-**Linux/MacOS:**
-```bash
-python3.12 -m venv venv
-source venv/bin/activate
-```
-
-#### 3. Установить зависимости
-
-```bash
-pip install -r requirements.txt
-```
-
-#### 4. Создать файл `.env` в директории `infra/`
-
-Переменные окружения загружаются из файла `infra/.env`. Пример содержимого:
-
-```bash
-# PostgreSQL
-POSTGRES_USER=booking_user
-POSTGRES_PASSWORD=secure_password
-POSTGRES_DB=cafe_booking
-POSTGRES_SERVER=localhost
-POSTGRES_PORT=5432
-
-# API
-APP_TITLE=Система бронирования мест в кафе
-APP_DESCRIPTION=API для бронирования столов в кафе
-SECRET_KEY=your_secret_key_here_min_32_chars
-ALGORITHM=HS256
-
-# Первый суперпользователь
-FIRST_SUPERUSER_LOGIN=admin@example.com
-FIRST_SUPERUSER_PASSWORD=admin_password
-
-# Redis для Celery
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_DB=0
-
-# Email для уведомлений (опционально)
-MAIL_USERNAME=your_email@gmail.com
-MAIL_PASSWORD=your_app_password
-MAIL_FROM=noreply@yourdomain.com
-MAIL_SERVER=smtp.gmail.com
-MAIL_PORT=587
-MAIL_STARTTLS=true
-MAIL_SSL_TLS=false
-MAIL_FROM_NAME=cafe booking
-```
-
-#### 5. Создать базу данных PostgreSQL
-
-```sql
-CREATE DATABASE cafe_booking;
-CREATE USER your_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE cafe_booking TO your_user;
-```
-
-#### 6. Применить миграции
-
-```bash
-alembic -c src/alembic.ini upgrade head
-```
-
-#### 7. Запустить Redis (для Celery)
-
-```bash
-# Если Redis установлен локально
-redis-server
-
-# Или через Docker
-docker run -d -p 6379:6379 redis:8-alpine
-```
-
-#### 8. Запустить Celery worker (в отдельном терминале)
-
-```bash
-celery -A src.celery_app.app.celery_app worker --loglevel=info
-```
-
-#### 9. Запустить Flower (опционально, для мониторинга)
-
-```bash
-celery -A src.celery_app.app.celery_app flower --port=5555
-```
-
-#### 10. Запустить сервер FastAPI
-
-```bash
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### Способ 2: Production запуск через Docker Compose (рекомендуемый)
-
-Этот способ поднимает все сервисы: PostgreSQL, Redis, API, Celery worker, Flower и Nginx.
+Этот способ позволяет запустить все необходимые сервисы без установки PostgreSQL и Redis локально.
 
 #### 1. Подготовка окружения
 
@@ -211,10 +107,101 @@ cd 64_65_booking_seats_team_3
 
 #### 2. Создать файл `.env` в директории `infra/`
 
+Используйте пример из `infra/.env.example` с параметрами для локальной разработки:
+
 ```bash
 # PostgreSQL
 POSTGRES_USER=booking_user
-POSTGRES_PASSWORD=secure_password
+POSTGRES_PASSWORD=dev_password
+POSTGRES_DB=cafe_booking
+POSTGRES_SERVER=db
+POSTGRES_PORT=5432
+
+# API
+APP_TITLE=Система бронирования мест в кафе (DEV)
+SECRET_KEY=dev_secret_key_min_32_characters_long
+ALGORITHM=HS256
+
+# Первый суперпользователь
+FIRST_SUPERUSER_LOGIN=admin@example.com
+FIRST_SUPERUSER_PASSWORD=admin
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
+```
+
+#### 3. Запустить контейнеры
+
+```bash
+cd infra
+docker-compose up -d --build
+```
+
+**Что произойдет:**
+
+- `db` — PostgreSQL 17 с оптимизированными настройками
+- `redis` — Redis 8 для Celery
+- `api` — FastAPI приложение с hot-reload (изменения в коде применяются автоматически)
+- `celery_worker` — Celery worker для фоновых задач
+- `flower` — Мониторинг Celery на [http://localhost:5555](http://localhost:5555)
+
+#### 4. Проверка работы
+
+```bash
+# Статус контейнеров
+docker-compose ps
+
+# Логи API
+docker-compose logs -f api
+
+# Swagger UI
+http://localhost:8000/docs
+```
+
+#### 5. Остановка контейнеров
+
+```bash
+docker-compose down
+
+# Или с удалением volumes (БД будет очищена)
+docker-compose down -v
+```
+
+---
+
+### Способ 2: Развертывание на production сервере
+
+Этот способ предназначен для развертывания приложения на удаленном сервере с использованием Docker Compose, Nginx и SSL-сертификатов.
+
+#### Требования к серверу
+
+- **ОС:** Linux (Ubuntu 20.04+, Debian 11+, или аналог)
+- **Docker:** версия 20.10+
+- **Docker Compose:** версия 2.0+
+- **Открытые порты:** 80 (HTTP), 443 (HTTPS)
+- **Доменное имя:** с настроенными DNS-записями, указывающими на IP сервера
+
+#### 1. Подключение к серверу и клонирование репозитория
+
+```bash
+# Подключиться к серверу по SSH
+ssh user@your-server.com
+
+# Клонировать репозиторий
+git clone https://github.com/Yandex-Practicum-Students/64_65_booking_seats_team_3.git
+cd 64_65_booking_seats_team_3
+```
+
+#### 2. Настройка переменных окружения
+
+Создайте файл `infra/.env` с production-настройками:
+
+```bash
+# PostgreSQL
+POSTGRES_USER=booking_user
+POSTGRES_PASSWORD=your_strong_password_here
 POSTGRES_DB=cafe_booking
 POSTGRES_SERVER=db
 POSTGRES_PORT=5432
@@ -222,73 +209,183 @@ POSTGRES_PORT=5432
 # API
 APP_TITLE=Система бронирования мест в кафе
 APP_DESCRIPTION=API для бронирования столов в кафе
-SECRET_KEY=your_super_secret_key_min_32_chars
+SECRET_KEY=your_super_secret_key_min_32_chars_random_string
 ALGORITHM=HS256
 
-# Первый суперпользователь
-FIRST_SUPERUSER_LOGIN=admin@example.com
-FIRST_SUPERUSER_PASSWORD=admin_password
+# Первый администратор
+FIRST_SUPERUSER_LOGIN=admin@yourdomain.com
+FIRST_SUPERUSER_PASSWORD=secure_admin_password
 
 # Redis
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_DB=0
 
-# Celery (опционально, если нужно переопределить)
-# CELERY_BROKER_URL=redis://redis:6379/0
-# CELERY_RESULT_BACKEND=redis://redis:6379/0
-
-# Email (настройте для продакшна)
-MAIL_USERNAME=
-MAIL_PASSWORD=
-MAIL_FROM=
+# Email (настройте реальные данные)
+MAIL_USERNAME=noreply@yourdomain.com
+MAIL_PASSWORD=your_smtp_password
+MAIL_FROM=noreply@yourdomain.com
 MAIL_SERVER=smtp.gmail.com
 MAIL_PORT=587
 MAIL_STARTTLS=true
 MAIL_SSL_TLS=false
-MAIL_FROM_NAME=cafe booking
+MAIL_FROM_NAME=Cafe Booking
 ```
 
-#### 3. Настройка SSL (для HTTPS)
+> **⚠️ Важно:** Используйте надежные пароли и храните файл `.env` в безопасности. Не коммитьте его в Git.
 
-Убедитесь, что у вас есть сертификаты Let's Encrypt для домена team3.ddns.net:
+#### 3. Настройка SSL-сертификатов (HTTPS)
+
+**Вариант A: Let's Encrypt (рекомендуется)**
 
 ```bash
-# Сертификаты должны лежать в:
-/etc/letsencrypt/live/team3.ddns.net/fullchain.pem
-/etc/letsencrypt/live/team3.ddns.net/privkey.pem
+# Установить certbot
+sudo apt update
+sudo apt install certbot
+
+# Получить сертификат для вашего домена
+sudo certbot certonly --standalone -d your-domain.com
+
+# Сертификаты будут размещены в:
+# /etc/letsencrypt/live/your-domain.com/fullchain.pem
+# /etc/letsencrypt/live/your-domain.com/privkey.pem
 ```
 
-Если сертификатов нет, временно закомментируйте в `infra/nginx.conf` блок с HTTPS и используйте только HTTP.
+**Вариант B: Без HTTPS (только для тестирования)**
 
-#### 4. Собрать и запустить контейнеры
+Если SSL не требуется, отредактируйте `infra/nginx.conf`:
+- Закомментируйте блок `server` для порта 443
+- Оставьте только блок для порта 80
+
+#### 4. Настройка Nginx конфигурации
+
+Отредактируйте `infra/nginx.conf`, заменив `team3.ddns.net` на ваш домен:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-domain.com;  # Ваш домен
+
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    
+    # ... остальная конфигурация
+}
+```
+
+#### 5. Запуск приложения
 
 ```bash
 cd infra
 docker-compose -f docker-compose.production.yml up -d --build
 ```
 
-**Что произойдет:**
+**Развернутые сервисы:**
 
-- `db` — PostgreSQL 17 с проверкой здоровья
-- `redis` — Redis 8
-- `api` — FastAPI приложение (через entrypoint.sh с миграциями)
-- `celery_worker` — Celery worker для фоновых задач
-- `flower` — Мониторинг Celery на порту 5555
-- `nginx` — Reverse-proxy на 80/443 с раздачей медиа
+| Сервис | Описание | Доступ |
+|--------|----------|--------|
+| `nginx` | Reverse-proxy с SSL | Порты 80, 443 |
+| `api` | FastAPI приложение | Внутренний порт 8000 |
+| `db` | PostgreSQL 17 | Внутренний порт 5432 |
+| `redis` | Redis 8 (брокер Celery) | Внутренний порт 6379 |
+| `celery_worker` | Обработчик фоновых задач | — |
+| `flower` | Мониторинг Celery | Порт 5555 |
 
-#### 5. Проверка работы
+#### 6. Проверка развертывания
 
 ```bash
-# Статус контейнеров
+# Проверить статус контейнеров
 docker-compose -f docker-compose.production.yml ps
 
-# Логи API
+# Проверить логи
 docker-compose -f docker-compose.production.yml logs -f api
 
-# Проверка эндпоинтов
-curl https://team3.ddns.net/api/v1/health
+# Проверить доступность API
+curl https://your-domain.com/api/v1/docs
+
+# Проверить health endpoint
+curl https://your-domain.com/api/v1/health
 ```
+
+#### 7. Автоматическое обновление SSL-сертификатов
+
+```bash
+# Настроить cron для автоматического обновления
+sudo crontab -e
+
+# Добавить строку (обновление каждый понедельник в 3:00)
+0 3 * * 1 certbot renew --quiet && docker-compose -f /path/to/infra/docker-compose.production.yml restart nginx
+```
+
+#### 8. Обновление приложения
+
+```bash
+# Остановить контейнеры
+cd infra
+docker-compose -f docker-compose.production.yml down
+
+# Получить последние изменения
+cd ..
+git pull origin main
+
+# Пересобрать и запустить
+cd infra
+docker-compose -f docker-compose.production.yml up -d --build
+
+# Проверить миграции (применяются автоматически при старте)
+docker-compose -f docker-compose.production.yml logs api | grep "alembic"
+```
+
+---
+
+### Способ 3: Локальный запуск без Docker (для продвинутых пользователей)
+
+<details>
+<summary>Развернуть инструкцию</summary>
+
+Если вы предпочитаете работать без Docker, вам понадобится локально установить:
+- **Python 3.12**
+- **PostgreSQL 17**
+- **Redis 8**
+
+#### Быстрая настройка
+
+```bash
+# 1. Клонировать и создать venv
+git clone https://github.com/Yandex-Practicum-Students/64_65_booking_seats_team_3.git
+cd 64_65_booking_seats_team_3
+python3.12 -m venv venv
+source venv/bin/activate  # Linux/MacOS
+# venv\Scripts\activate  # Windows
+
+# 2. Установить зависимости
+pip install -r requirements.txt
+
+# 3. Настроить .env в infra/.env
+# Используйте POSTGRES_SERVER=localhost и REDIS_HOST=localhost
+
+# 4. Создать БД PostgreSQL
+psql -U postgres
+CREATE DATABASE cafe_booking;
+CREATE USER booking_user WITH PASSWORD 'your_password';
+GRANT ALL PRIVILEGES ON DATABASE cafe_booking TO booking_user;
+\q
+
+# 5. Применить миграции
+alembic -c src/alembic.ini upgrade head
+
+# 6. Запустить Redis
+redis-server
+# или: docker run -d -p 6379:6379 redis:8-alpine
+
+# 7. Запустить Celery worker (в отдельном терминале)
+celery -A src.celery_app.app.celery_app worker --loglevel=info
+
+# 8. Запустить API
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+</details>
 
 ---
 
@@ -331,7 +428,7 @@ curl -X POST http://localhost:8000/api/v1/cafes \
 ### Создание бронирования
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/booking \
+curl -X POST http://localhost:8000/api/v1/bookings \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -399,11 +496,27 @@ alembic -c src/alembic.ini downgrade -1
 
 ## Мониторинг и логи
 
-| Сервис | Адрес доступа |
-|--------|---------------|
-| **Flower** (мониторинг Celery) | `https://team3.ddns.net:5555` или `http://localhost:5555` |
-| **Логи всех сервисов** | `docker-compose -f infra/docker-compose.production.yml logs -f` |
-| **Логи только API** | `docker logs cafe_booking-api-1` |
+### Доступ к мониторингу
+
+| Сервис | Локальная разработка | Production |
+|--------|---------------------|------------|
+| **Flower** (Celery) | `http://localhost:5555` | `http://your-domain.com:5555` |
+| **Swagger UI** | `http://localhost:8000/docs` | `https://your-domain.com/api/v1/docs` |
+
+### Просмотр логов
+
+```bash
+# Логи всех сервисов
+docker-compose -f infra/docker-compose.production.yml logs -f
+
+# Логи конкретного сервиса
+docker-compose -f infra/docker-compose.production.yml logs -f api
+docker-compose -f infra/docker-compose.production.yml logs -f celery_worker
+docker-compose -f infra/docker-compose.production.yml logs -f nginx
+
+# Последние 100 строк логов API
+docker-compose -f infra/docker-compose.production.yml logs --tail=100 api
+```
 
 ---
 
@@ -425,15 +538,75 @@ docker run --rm -v cafe_booking_media:/media -v $(pwd):/backup alpine tar czf /b
 
 ## Тестирование
 
-Проект покрыт тестами с использованием `pytest`.
+Проект покрыт тестами с использованием `pytest` и `pytest-asyncio`.
+
+### Покрытие тестами
+
+В проекте реализовано **частичное покрытие тестами** критических модулей:
+
+| Модуль | Покрытие | Количество тестов | Описание |
+|--------|----------|-------------------|----------|
+| **Bookings API** | ✅ Высокое | 18 тестов | Создание, обновление, отмена бронирований, проверка лимитов, конфликтов, валидация |
+| **Media API** | ✅ Высокое | 8 тестов | Загрузка изображений, проверка размеров, форматов, прав доступа |
+| **Auth** | ⚠️ Частичное | Фикстуры | JWT токены, роли (используется в других тестах) |
+| **Cafes, Tables, Slots, Users** | ❌ Нет | 0 тестов | Требуется добавить тесты CRUD операций |
+
+**Итого:** 26+ тестов покрывают основные бизнес-сценарии бронирований и работы с медиа.
+
+### Структура тестов
+
+```text
+tests/
+├── conftest.py              # Основные фикстуры (event loop, async_client, manage_db)
+├── fixtures/                # Модульные фикстуры
+│   ├── auth.py             # test_user, test_admin, user_headers, admin_headers
+│   ├── db.py               # session, create_user (фабрика пользователей)
+│   └── entities.py         # test_cafe, test_table, test_slot, test_table_slot
+├── test_booking_api.py     # 18 тестов API бронирований
+└── test_media_api.py       # 8 тестов API медиа-файлов
+```
+
+### Ключевые тестовые сценарии
+
+**Бронирования:**
+- ✅ Создание и получение бронирования
+- ✅ Обновление полей и смена статуса
+- ✅ Мягкое удаление (soft delete)
+- ✅ Проверка лимита 3 активных бронирований
+- ✅ Конфликт бронирования одного слота
+- ✅ Запрет бронирования на прошедшую дату
+- ✅ Валидация полей (длина комментария, пустые столы)
+- ✅ Разграничение прав (менеджер не может отменить чужую бронь)
+
+**Медиа:**
+- ✅ Загрузка изображений (PNG → JPEG конвертация)
+- ✅ Проверка прав доступа (admin/manager)
+- ✅ Валидация формата и размера файла (макс. 5 МБ)
+- ✅ Получение изображения по media_id
+
+### Запуск тестов
 
 ```bash
-# Локальный запуск тестов
+# Локальный запуск всех тестов
 pytest -v
 
-# Запуск тестов в Docker (предварительно создав тестовую БД)
+# Запуск конкретного файла
+pytest tests/test_booking_api.py -v
+
+# Запуск с покрытием кода
+pytest --cov=src --cov-report=html
+
+# Запуск тестов в Docker
 docker exec cafe_booking-api-1 pytest -v
 ```
+
+### Конфигурация pytest
+
+Настройки находятся в `pytest.ini` и включают:
+- Асинхронные тесты через `pytest-asyncio` (scope='session')
+- Автоматический поиск тестов в директории `tests/`
+- Плагины фикстур через `pytest_plugins`
+- Настройки вывода и маркеров
 
 ---
 
@@ -441,20 +614,92 @@ docker exec cafe_booking-api-1 pytest -v
 
 ```text
 src/
-├── auth/           # Аутентификация и JWT токены
-├── cafes/          # Управление кафе
-├── tables/         # Управление столами
-├── slots/          # Управление временными слотами
-├── bookings/       # Управление бронированиями
-├── users/          # Управление пользователями
-├── media/          # Работа с изображениями
-├── celery_app/     # Конфигурация Celery и задачи
-│   ├── app.py      # Инициализация Celery
-│   └── tasks/      # Фоновые задачи
-├── core/           # Конфигурация и утилиты (config, logger, middleware)
-├── db/             # Настройка БД, сессии, first_admin
-└── main.py         # Точка входа
+├── auth/                    # Аутентификация и JWT токены
+│   ├── dependencies.py      # Dependency injection для авторизации
+│   ├── jwt.py              # Работа с JWT токенами
+│   ├── password.py         # Хеширование паролей
+│   ├── router.py           # Эндпоинты аутентификации
+│   ├── schemas.py          # Pydantic схемы
+│   └── service.py          # Бизнес-логика
+├── cafes/                  # Управление кафе
+├── tables/                 # Управление столами
+├── slots/                  # Управление временными слотами
+├── bookings/               # Управление бронированиями
+│   ├── dependencies.py     # Зависимости для бронирований
+│   ├── notifications.py    # Уведомления о бронированиях
+│   └── utils.py           # Вспомогательные функции
+├── users/                  # Управление пользователями
+├── media/                  # Работа с изображениями
+├── notifications/          # Система уведомлений
+│   ├── config.py          # Настройки email
+│   └── email.py           # Отправка email
+├── celery_app/            # Конфигурация Celery и задачи
+│   ├── app.py             # Инициализация Celery
+│   └── tasks/             # Фоновые задачи
+│       └── booking_notif_tasks.py
+├── crud/                   # Базовые CRUD операции
+│   ├── crud.py            # Базовый класс CRUD
+│   └── utils.py           # Утилиты для CRUD
+├── core/                   # Конфигурация и утилиты
+│   ├── config.py          # Настройки приложения (Pydantic Settings)
+│   ├── constants.py       # Константы проекта
+│   ├── logger.py          # Настройка логирования
+│   ├── middleware.py      # Middleware (User Context, CORS)
+│   └── router.py          # Главный роутер
+├── db/                     # Настройка БД
+│   ├── base.py            # Базовая модель SQLAlchemy
+│   ├── first_admin.py     # Создание первого администратора
+│   ├── models_for_alembic.py  # Импорт моделей для миграций
+│   ├── session.py         # Асинхронная сессия БД
+│   └── utils.py           # Утилиты для работы с БД
+├── alembic/                # Миграции базы данных
+│   ├── env.py             # Конфигурация Alembic
+│   └── versions/          # История миграций
+├── alembic.ini            # Настройки Alembic
+└── main.py                # Точка входа (FastAPI app)
 ```
+
+---
+
+## Инструменты разработки
+
+Проект использует современные инструменты для поддержания качества кода:
+
+### Ruff — линтер и форматтер
+
+Настройки находятся в `ruff.toml`. Ruff проверяет стиль кода, находит потенциальные ошибки и автоматически форматирует код.
+
+```bash
+# Проверка кода
+ruff check .
+
+# Автоматическое исправление
+ruff check --fix .
+
+# Форматирование кода
+ruff format .
+```
+
+### Pre-commit hooks
+
+Автоматическая проверка кода перед каждым коммитом. Настройки в `.pre-commit-config.yaml`.
+
+```bash
+# Установка хуков
+pre-commit install
+
+# Ручной запуск проверки
+pre-commit run --all-files
+```
+
+### GitHub Actions CI/CD
+
+Проект использует GitHub Actions для автоматизации:
+
+- **style_check.yml** — проверка стиля кода с помощью Ruff
+- **main.yml** — основной CI/CD пайплайн
+
+Пайплайны запускаются автоматически при push и pull request.
 
 ---
 
@@ -483,6 +728,26 @@ docker exec cafe_booking-redis-1 redis-cli ping
 ### Ошибка загрузки переменных окружения
 
 Убедитесь, что файл `.env` находится в директории `infra/`, а не в корне проекта. Настройки приложения ожидают файл именно по пути `infra/.env`.
+
+### Проблемы с hot-reload в Docker
+
+Если изменения в коде не применяются автоматически при использовании `docker-compose.yml`:
+
+```bash
+# Пересоздать контейнер API
+docker-compose restart api
+
+# Или пересобрать образ
+docker-compose up -d --build api
+```
+
+### CORS ошибки
+
+Проверьте настройки CORS в `.env` или `src/core/config.py`. По умолчанию разрешены методы: `GET`, `POST`, `PATCH`.
+
+### Ошибки валидации Pydantic
+
+Проект использует **Pydantic v2**. При обновлении схем убедитесь в совместимости с новым API Pydantic.
 
 ---
 
