@@ -11,7 +11,7 @@ CUSTOM_ERROR_SCHEMA = {
 }
 
 AUTH_LOGIN_RESPONSES = {
-    HTTPStatus.UNPROCESSABLE_ENTITY.value: {
+    HTTPStatus.UNAUTHORIZED.value: {
         'description': 'Неверные имя пользователя или пароль',
         'content': {
             'application/json': {

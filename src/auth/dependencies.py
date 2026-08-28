@@ -58,7 +58,13 @@ async def get_current_user_optional(
         logger.warning('Subject не найден в JWT payload.')
         return None
 
-    user = await session.get(User, UUID(sub))
+    try:
+        uuid_sub = UUID(sub)
+    except (ValueError, TypeError, AttributeError):
+        logger.warning('Subject невозможно трансформировать в UUID.')
+        return None
+
+    user = await session.get(User, uuid_sub)
     if not user:
         logger.warning('Пользователь с переданным id не найден.')
         return None
