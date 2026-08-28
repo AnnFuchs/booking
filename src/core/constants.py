@@ -124,10 +124,13 @@ ADMIN_ONLY_UPDATE_FIELDS: tuple[str, str] = ('role', 'is_active')
 MIN_LEN: int = 1
 """Минимальная длина всех обязательных полей."""
 
+MAX_LEN: int = 255
+"""Дефолтная максимальная длина обязательных полей."""
+
 NAME_MAX_LEN: int = 100
 """Максимальная длина для поля name."""
 
-ADDRESS_MAX_LEN: int = 256
+ADDRESS_MAX_LEN: int = 255
 """Максимальная длина для поля address."""
 
 PHONE_MAX_LEN: int = 20

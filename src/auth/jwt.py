@@ -11,6 +11,11 @@ logger = get_logger(__name__)
 
 def create_access_token(data: dict) -> str:
     """Генерация JWT токена."""
+    if not data or 'sub' not in data:
+        logger.warning(
+            'Не переданы данные для создания токена или отсутствует sub.',
+        )
+        raise ValueError('Subject (sub) обязателен для создания токена')
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(seconds=JWT_LIFE)
     to_encode.update({'exp': expire})

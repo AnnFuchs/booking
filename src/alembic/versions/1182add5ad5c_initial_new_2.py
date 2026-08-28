@@ -41,7 +41,7 @@ def upgrade() -> None:
         op.create_table(
             'cafes',
             sa.Column('name', sa.String(length=100), nullable=False),
-            sa.Column('address', sa.String(length=256), nullable=False),
+            sa.Column('address', sa.String(length=255), nullable=False),
             sa.Column('phone', sa.String(length=20), nullable=False),
             sa.Column('description', sa.String(length=500), nullable=True),
             sa.Column('photo_id', sa.UUID(), nullable=True),

@@ -37,7 +37,7 @@ async def auth_user(user_data: AuthData, session: SessionDep) -> AuthToken:
             user_data.login,
         )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail='Неверный логин или пароль',
         )
 
