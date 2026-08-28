@@ -101,7 +101,7 @@ class User(Base):
         if email is None:
             return None
         try:
-            valid_email = validate_email(email)
+            valid_email = validate_email(email, check_deliverability=False)
             return valid_email.normalized
         except EmailNotValidError:
             raise ValueError(
