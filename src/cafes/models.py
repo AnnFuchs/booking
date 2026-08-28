@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
@@ -27,6 +27,9 @@ class Cafe(Base):
 
     __table_args__ = (
         UniqueConstraint('name', 'address', name='uq_cafe_name_address'),
+        Index('ix_cafes_is_active', 'is_active'),
+        Index('ix_cafes_name', 'name'),
+        Index('ix_cafes_photo_id', 'photo_id'),
     )
 
     name: Mapped[str] = mapped_column(

@@ -8,6 +8,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     ForeignKey,
+    Index,
     String,
     UniqueConstraint,
 )
@@ -29,6 +30,21 @@ class Booking(Base):
         CheckConstraint(
             'guest_number > 0',
             name='check_booking_guest_number_positive',
+        ),
+        Index('ix_bookings_user_id', 'user_id'),
+        Index('ix_bookings_user_date', 'user_id', 'booking_date'),
+        Index('ix_bookings_status_active', 'status', 'is_active'),
+        Index(
+            'ix_bookings_cafe_date_active',
+            'cafe_id',
+            'booking_date',
+            'is_active',
+        ),
+        Index(
+            'ix_bookings_date_status_active',
+            'booking_date',
+            'status',
+            'is_active',
         ),
     )
 
@@ -91,6 +107,16 @@ class TableSlot(Base):
             'slot_id',
             'booking_date',
             name='uq_table_slot_date',
+        ),
+        Index('ix_table_slots_table_date', 'table_id', 'booking_date'),
+        Index('ix_table_slots_slot_date', 'slot_id', 'booking_date'),
+        Index('ix_table_slots_booking_id', 'booking_id'),
+        Index('ix_table_slots_date_active', 'booking_date', 'is_active'),
+        Index(
+            'ix_table_slots_date_active_booking',
+            'booking_date',
+            'is_active',
+            'booking_id',
         ),
     )
 

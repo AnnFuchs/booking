@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -13,6 +13,21 @@ class Table(Base):
     """ORM модель стола."""
 
     __tablename__ = 'tables'
+    __table_args__ = (
+        CheckConstraint(
+            'seat_number > 0',
+            name='check_table_seat_number_positive',
+        ),
+        Index('ix_tables_cafe_id', 'cafe_id'),
+        Index('ix_tables_cafe_active', 'cafe_id', 'is_active'),
+        Index('ix_tables_seat_number', 'seat_number'),
+        Index(
+            'ix_tables_cafe_seats_active',
+            'cafe_id',
+            'seat_number',
+            'is_active',
+        ),
+    )
 
     description: Mapped[str | None] = mapped_column(
         String(DESCRIPTION_MAX_LEN),
@@ -31,11 +46,4 @@ class Table(Base):
         'Cafe',
         back_populates='tables',
         lazy='selectin',
-    )
-
-    __table_args__ = (
-        CheckConstraint(
-            'seat_number > 0',
-            name='check_table_seat_number_positive',
-        ),
     )

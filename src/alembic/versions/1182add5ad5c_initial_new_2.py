@@ -28,14 +28,22 @@ def upgrade() -> None:
     if 'media' not in existing_tables:
         op.create_table(
             'media',
-            sa.Column('file_path', sa.String(length=500), nullable=False),
+            sa.Column('file_path', sa.String(length=500),
+                      nullable=False),
             sa.Column('id', sa.UUID(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
             sa.Column('is_active', sa.Boolean(), nullable=False),
             sa.PrimaryKeyConstraint('id'),
             sa.UniqueConstraint('file_path')
         )
+        with op.batch_alter_table('media', schema=None) as batch_op:
+            batch_op.create_index('ix_media_is_active', ['is_active'],
+                                  unique=False)
+            batch_op.create_index('ix_media_created_at', ['created_at'],
+                                  unique=False)
 
     if 'cafes' not in existing_tables:
         op.create_table(
@@ -43,16 +51,27 @@ def upgrade() -> None:
             sa.Column('name', sa.String(length=100), nullable=False),
             sa.Column('address', sa.String(length=255), nullable=False),
             sa.Column('phone', sa.String(length=20), nullable=False),
-            sa.Column('description', sa.String(length=500), nullable=True),
+            sa.Column('description', sa.String(length=500),
+                      nullable=True),
             sa.Column('photo_id', sa.UUID(), nullable=True),
             sa.Column('id', sa.UUID(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
             sa.Column('is_active', sa.Boolean(), nullable=False),
-            sa.ForeignKeyConstraint(['photo_id'], ['media.id'], ondelete='SET NULL'),
+            sa.ForeignKeyConstraint(['photo_id'], ['media.id'],
+                                    ondelete='SET NULL'),
             sa.PrimaryKeyConstraint('id'),
-            sa.UniqueConstraint('name', 'address', name='uq_cafe_name_address')
+            sa.UniqueConstraint('name', 'address',
+                                name='uq_cafe_name_address')
         )
+        with op.batch_alter_table('cafes', schema=None) as batch_op:
+            batch_op.create_index('ix_cafes_is_active', ['is_active'],
+                                  unique=False)
+            batch_op.create_index('ix_cafes_name', ['name'], unique=False)
+            batch_op.create_index('ix_cafes_photo_id', ['photo_id'],
+                                  unique=False)
 
     if 'slots' not in existing_tables:
         op.create_table(
@@ -62,57 +81,95 @@ def upgrade() -> None:
             sa.Column('description', sa.Text(), nullable=True),
             sa.Column('cafe_id', sa.UUID(), nullable=False),
             sa.Column('id', sa.UUID(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
             sa.Column('is_active', sa.Boolean(), nullable=False),
-            sa.CheckConstraint('start_time < end_time', name='check_time_order'),
-            sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id'], ondelete='CASCADE'),
+            sa.CheckConstraint('start_time < end_time',
+                               name='check_time_order'),
+            sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id'],
+                                    ondelete='CASCADE'),
             sa.PrimaryKeyConstraint('id')
         )
         with op.batch_alter_table('slots', schema=None) as batch_op:
-            batch_op.create_index('ix_slots_cafe_active', ['cafe_id', 'is_active'], unique=False)
-            batch_op.create_index(batch_op.f('ix_slots_cafe_id'), ['cafe_id'], unique=False)
-            batch_op.create_index('ix_slots_cafe_start_time', ['cafe_id', 'start_time'], unique=False)
+            batch_op.create_index('ix_slots_cafe_active',
+                                  ['cafe_id', 'is_active'], unique=False)
+            batch_op.create_index(batch_op.f('ix_slots_cafe_id'),
+                                  ['cafe_id'], unique=False)
+            batch_op.create_index('ix_slots_cafe_start_time',
+                                  ['cafe_id', 'start_time'], unique=False)
 
     if 'tables' not in existing_tables:
         op.create_table(
             'tables',
-            sa.Column('description', sa.String(length=500), nullable=True),
+            sa.Column('description', sa.String(length=500),
+                      nullable=True),
             sa.Column('seat_number', sa.Integer(), nullable=False),
             sa.Column('cafe_id', sa.UUID(), nullable=False),
             sa.Column('id', sa.UUID(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
             sa.Column('is_active', sa.Boolean(), nullable=False),
-            sa.CheckConstraint('seat_number > 0', name='check_table_seat_number_positive'),
-            sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id'], ),
+            sa.CheckConstraint('seat_number > 0',
+                               name='check_table_seat_number_positive'),
+            sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id']),
             sa.PrimaryKeyConstraint('id')
         )
+        with op.batch_alter_table('tables', schema=None) as batch_op:
+            batch_op.create_index('ix_tables_cafe_id', ['cafe_id'],
+                                  unique=False)
+            batch_op.create_index('ix_tables_cafe_active',
+                                  ['cafe_id', 'is_active'], unique=False)
+            batch_op.create_index('ix_tables_seat_number', ['seat_number'],
+                                  unique=False)
+            batch_op.create_index(
+                'ix_tables_cafe_seats_active',
+                ['cafe_id', 'seat_number', 'is_active'], unique=False
+            )
 
     if 'users' not in existing_tables:
-            op.create_table(
-                'users',
-                sa.Column('username', sa.String(length=32), nullable=False),
-                sa.Column('email', sa.String(length=256), nullable=True),
-                sa.Column('phone', sa.String(length=20), nullable=True),
-                sa.Column('tg_id', sa.String(length=32), nullable=True),
-                sa.Column('hashed_password', sa.String(length=72), nullable=False),
-                sa.Column('role', sa.Enum('USER', 'MANAGER', 'ADMIN', name='role_enum'), nullable=False),
-                sa.Column('cafe_id', sa.UUID(), nullable=True),
-                sa.Column('id', sa.UUID(), nullable=False),
-                sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-                sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-                sa.Column('is_active', sa.Boolean(), nullable=False),
-                sa.CheckConstraint('(email IS NOT NULL) OR (phone IS NOT NULL)', name='email_or_phone_not_null'),
-                sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id'], ondelete='SET NULL'),
-                sa.PrimaryKeyConstraint('id'),
-                sa.UniqueConstraint('tg_id')
-            )
-            with op.batch_alter_table('users', schema=None) as batch_op:
-                batch_op.create_index(batch_op.f('ix_users_cafe_id'), ['cafe_id'], unique=False)
-                batch_op.create_index(batch_op.f('ix_users_email'), ['email'], unique=True)
-                batch_op.create_index(batch_op.f('ix_users_phone'), ['phone'], unique=True)
-                batch_op.create_index(batch_op.f('ix_users_username'), ['username'], unique=True)
+        op.create_table(
+            'users',
+            sa.Column('username', sa.String(length=32), nullable=False),
+            sa.Column('email', sa.String(length=256), nullable=True),
+            sa.Column('phone', sa.String(length=20), nullable=True),
+            sa.Column('tg_id', sa.String(length=32), nullable=True),
+            sa.Column('hashed_password', sa.String(length=72),
+                      nullable=False),
+            sa.Column('role', sa.Enum('USER', 'MANAGER', 'ADMIN',
+                      name='role_enum'), nullable=False),
+            sa.Column('cafe_id', sa.UUID(), nullable=True),
+            sa.Column('id', sa.UUID(), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
+            sa.Column('is_active', sa.Boolean(), nullable=False),
+            sa.CheckConstraint(
+                '(email IS NOT NULL) OR (phone IS NOT NULL)',
+                name='email_or_phone_not_null'
+            ),
+            sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id'],
+                                    ondelete='SET NULL'),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('tg_id')
+        )
+        with op.batch_alter_table('users', schema=None) as batch_op:
+            batch_op.create_index(batch_op.f('ix_users_cafe_id'),
+                                  ['cafe_id'], unique=False)
+            batch_op.create_index(batch_op.f('ix_users_email'),
+                                  ['email'], unique=True)
+            batch_op.create_index(batch_op.f('ix_users_phone'),
+                                  ['phone'], unique=True)
+            batch_op.create_index(batch_op.f('ix_users_tg_id'),
+                                  ['tg_id'], unique=True)
+            batch_op.create_index(batch_op.f('ix_users_username'),
+                                  ['username'], unique=True)
+            batch_op.create_index('ix_users_role_active',
+                                  ['role', 'is_active'], unique=False)
 
     if 'bookings' not in existing_tables:
         op.create_table(
@@ -120,21 +177,46 @@ def upgrade() -> None:
             sa.Column('user_id', sa.UUID(), nullable=False),
             sa.Column('guest_number', sa.Integer(), nullable=False),
             sa.Column('note', sa.String(length=500), nullable=True),
-            sa.Column('status', sa.Enum('BOOKING', 'CANCELED', 'ACTIVE', 'COMPLETED', name='bookingstatus'), nullable=False),
+            sa.Column('status',
+                      sa.Enum('BOOKING', 'CANCELED', 'ACTIVE', 'COMPLETED',
+                              name='bookingstatus'),
+                      nullable=False),
             sa.Column('cafe_id', sa.UUID(), nullable=False),
             sa.Column('booking_date', sa.Date(), nullable=False),
             sa.Column('id', sa.UUID(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
             sa.Column('is_active', sa.Boolean(), nullable=False),
-            sa.CheckConstraint('guest_number > 0', name='check_booking_guest_number_positive'),
-            sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id'], ),
-            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+            sa.CheckConstraint(
+                'guest_number > 0',
+                name='check_booking_guest_number_positive'
+            ),
+            sa.ForeignKeyConstraint(['cafe_id'], ['cafes.id']),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id']),
             sa.PrimaryKeyConstraint('id')
         )
         with op.batch_alter_table('bookings', schema=None) as batch_op:
-            batch_op.create_index(batch_op.f('ix_bookings_booking_date'), ['booking_date'], unique=False)
-            batch_op.create_index(batch_op.f('ix_bookings_cafe_id'), ['cafe_id'], unique=False)
+            batch_op.create_index(batch_op.f('ix_bookings_booking_date'),
+                                  ['booking_date'], unique=False)
+            batch_op.create_index(batch_op.f('ix_bookings_cafe_id'),
+                                  ['cafe_id'], unique=False)
+            batch_op.create_index('ix_bookings_user_id', ['user_id'],
+                                  unique=False)
+            batch_op.create_index('ix_bookings_user_date',
+                                  ['user_id', 'booking_date'],
+                                  unique=False)
+            batch_op.create_index('ix_bookings_status_active',
+                                  ['status', 'is_active'], unique=False)
+            batch_op.create_index(
+                'ix_bookings_cafe_date_active',
+                ['cafe_id', 'booking_date', 'is_active'], unique=False
+            )
+            batch_op.create_index(
+                'ix_bookings_date_status_active',
+                ['booking_date', 'status', 'is_active'], unique=False
+            )
 
     if 'table_slots' not in existing_tables:
         op.create_table(
@@ -144,40 +226,90 @@ def upgrade() -> None:
             sa.Column('booking_date', sa.Date(), nullable=False),
             sa.Column('booking_id', sa.UUID(), nullable=True),
             sa.Column('id', sa.UUID(), nullable=False),
-            sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-            sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+            sa.Column('created_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(timezone=True),
+                      server_default=sa.text('now()'), nullable=False),
             sa.Column('is_active', sa.Boolean(), nullable=False),
-            sa.ForeignKeyConstraint(['booking_id'], ['bookings.id'], ondelete='SET NULL'),
-            sa.ForeignKeyConstraint(['slot_id'], ['slots.id'], ondelete='CASCADE'),
-            sa.ForeignKeyConstraint(['table_id'], ['tables.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['booking_id'], ['bookings.id'],
+                                    ondelete='SET NULL'),
+            sa.ForeignKeyConstraint(['slot_id'], ['slots.id'],
+                                    ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['table_id'], ['tables.id'],
+                                    ondelete='CASCADE'),
             sa.PrimaryKeyConstraint('id'),
-            sa.UniqueConstraint('table_id', 'slot_id', 'booking_date', name='uq_table_slot_date')
+            sa.UniqueConstraint('table_id', 'slot_id', 'booking_date',
+                                name='uq_table_slot_date')
         )
+        with op.batch_alter_table('table_slots', schema=None) as batch_op:
+            batch_op.create_index('ix_table_slots_table_date',
+                                  ['table_id', 'booking_date'],
+                                  unique=False)
+            batch_op.create_index('ix_table_slots_slot_date',
+                                  ['slot_id', 'booking_date'],
+                                  unique=False)
+            batch_op.create_index('ix_table_slots_booking_id',
+                                  ['booking_id'], unique=False)
+            batch_op.create_index('ix_table_slots_date_active',
+                                  ['booking_date', 'is_active'],
+                                  unique=False)
+            batch_op.create_index(
+                'ix_table_slots_date_active_booking',
+                ['booking_date', 'is_active', 'booking_id'], unique=False
+            )
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    with op.batch_alter_table('table_slots', schema=None) as batch_op:
+        batch_op.drop_index('ix_table_slots_date_active_booking')
+        batch_op.drop_index('ix_table_slots_date_active')
+        batch_op.drop_index('ix_table_slots_booking_id')
+        batch_op.drop_index('ix_table_slots_slot_date')
+        batch_op.drop_index('ix_table_slots_table_date')
     op.drop_table('table_slots')
+
     with op.batch_alter_table('bookings', schema=None) as batch_op:
+        batch_op.drop_index('ix_bookings_date_status_active')
+        batch_op.drop_index('ix_bookings_cafe_date_active')
+        batch_op.drop_index('ix_bookings_status_active')
+        batch_op.drop_index('ix_bookings_user_date')
+        batch_op.drop_index('ix_bookings_user_id')
         batch_op.drop_index(batch_op.f('ix_bookings_cafe_id'))
         batch_op.drop_index(batch_op.f('ix_bookings_booking_date'))
-
     op.drop_table('bookings')
+
     with op.batch_alter_table('users', schema=None) as batch_op:
+        batch_op.drop_index('ix_users_role_active')
         batch_op.drop_index(batch_op.f('ix_users_username'))
+        batch_op.drop_index(batch_op.f('ix_users_tg_id'))
         batch_op.drop_index(batch_op.f('ix_users_phone'))
         batch_op.drop_index(batch_op.f('ix_users_email'))
         batch_op.drop_index(batch_op.f('ix_users_cafe_id'))
-
     op.drop_table('users')
+
+    with op.batch_alter_table('tables', schema=None) as batch_op:
+        batch_op.drop_index('ix_tables_cafe_seats_active')
+        batch_op.drop_index('ix_tables_seat_number')
+        batch_op.drop_index('ix_tables_cafe_active')
+        batch_op.drop_index('ix_tables_cafe_id')
     op.drop_table('tables')
+
     with op.batch_alter_table('slots', schema=None) as batch_op:
         batch_op.drop_index('ix_slots_cafe_start_time')
         batch_op.drop_index(batch_op.f('ix_slots_cafe_id'))
         batch_op.drop_index('ix_slots_cafe_active')
-
     op.drop_table('slots')
+
+    with op.batch_alter_table('cafes', schema=None) as batch_op:
+        batch_op.drop_index('ix_cafes_photo_id')
+        batch_op.drop_index('ix_cafes_name')
+        batch_op.drop_index('ix_cafes_is_active')
     op.drop_table('cafes')
+
+    with op.batch_alter_table('media', schema=None) as batch_op:
+        batch_op.drop_index('ix_media_created_at')
+        batch_op.drop_index('ix_media_is_active')
     op.drop_table('media')
     # ### end Alembic commands ###

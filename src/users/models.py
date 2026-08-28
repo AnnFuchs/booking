@@ -2,7 +2,7 @@ import uuid
 from typing import TYPE_CHECKING
 
 from email_validator import EmailNotValidError, validate_email
-from sqlalchemy import CheckConstraint, Enum, ForeignKey, String
+from sqlalchemy import CheckConstraint, Enum, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
@@ -44,6 +44,7 @@ class User(Base):
             '(email IS NOT NULL) OR (phone IS NOT NULL)',
             name='email_or_phone_not_null',
         ),
+        Index('ix_users_role_active', 'role', 'is_active'),
     )
 
     username: Mapped[str] = mapped_column(
@@ -65,6 +66,7 @@ class User(Base):
     tg_id: Mapped[str | None] = mapped_column(
         String(length=TG_ID_MAX_LEN),
         unique=True,
+        index=True,
     )
     hashed_password: Mapped[str] = mapped_column(
         String(length=PW_MAX_LEN),
